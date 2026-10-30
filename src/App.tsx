@@ -290,7 +290,7 @@ function App() {
         })
         if (!active) return
         setProfile(loadedProfile)
-        setScreen('dashboard')
+        setScreen((current) => (current === 'login' ? 'dashboard' : current))
       } catch {
         if (!active) return
         setProfile(null)

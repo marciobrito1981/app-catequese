@@ -436,7 +436,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
-.profile-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: contents; }
+.profile-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: block; }
 .profile-fieldset input:disabled, .profile-fieldset select:disabled { background: #f4f6f7; color: #4b5963; cursor: default; }
 .view-registration-button { min-height: 34px; font-size: 12px; white-space: nowrap; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(20, 30, 38, .55); }
