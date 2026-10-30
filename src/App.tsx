@@ -10,6 +10,7 @@ import {
   Church,
   CircleHelp,
   Clock3,
+  Eye,
   FileCheck2,
   FileText,
   Heart,
@@ -20,11 +21,13 @@ import {
   MapPin,
   Menu,
   Pencil,
+  Search,
   ShieldCheck,
   Trash2,
   UserRound,
   UserPlus,
   UsersRound,
+  X,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
@@ -45,6 +48,7 @@ import type {
   AuthenticatedProfile,
   CatechistRecord,
   Profile,
+  ProfileAddress,
   RegistrationRow,
   Schedule,
   UserRole,
@@ -120,11 +124,17 @@ async function loadAuthenticatedProfile(
     .single()
   if (roleError) throw roleError
 
-  let detail: { full_name: string; phone: string | null } | null = null
+  let detail: {
+    full_name: string
+    phone: string | null
+    cpf?: string | null
+    birth_date?: string | null
+    address?: ProfileAddress | null
+  } | null = null
   if (roleProfile.role === 'catequista') {
     const { data, error } = await client
       .from('t_catequista')
-      .select('full_name, phone')
+      .select('full_name, phone, cpf')
       .eq('id', user.id)
       .maybeSingle()
     if (error) throw error
@@ -132,12 +142,29 @@ async function loadAuthenticatedProfile(
   } else if (roleProfile.role === 'catequizando') {
     const { data, error } = await client
       .from('t_catequizando')
-      .select('full_name, phone')
+      .select('full_name, phone, cpf, birth_date, postal_code, street, street_number, complement, neighborhood, city, state')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
     if (error) throw error
-    detail = data?.[0] ?? null
+    const row = data?.[0]
+    detail = row
+      ? {
+        full_name: row.full_name,
+        phone: row.phone,
+        cpf: row.cpf,
+        birth_date: row.birth_date,
+        address: {
+          postal_code: row.postal_code,
+          street: row.street,
+          street_number: row.street_number,
+          complement: row.complement,
+          neighborhood: row.neighborhood,
+          city: row.city,
+          state: row.state,
+        },
+      }
+      : null
   }
 
   const metadataName = typeof user.user_metadata.full_name === 'string'
@@ -155,8 +182,20 @@ async function loadAuthenticatedProfile(
     full_name: detail?.full_name || metadataName || user.email?.split('@')[0] || 'Usuário',
     phone: detail?.phone ?? metadataPhone,
     email: user.email ?? '',
+    cpf: detail?.cpf ?? null,
+    birth_date: detail?.birth_date ?? null,
+    address: detail?.address ?? null,
     mustChangePassword,
   }
+}
+
+async function functionErrorMessage(error: unknown, fallback: string) {
+  const context = (error as { context?: Response } | null)?.context
+  if (context && typeof context.json === 'function') {
+    const body = await context.json().catch(() => null) as { error?: string } | null
+    if (body?.error) return body.error
+  }
+  return fallback
 }
 
 function isConfigurationMissing() {
@@ -227,7 +266,6 @@ function App() {
   const [profile, setProfile] = useState<AuthenticatedProfile | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [registrationToEdit, setRegistrationToEdit] = useState<RegistrationRow | null>(null)
 
   useEffect(() => {
     if (!supabase) {
@@ -327,16 +365,8 @@ function App() {
   if (screen === 'catequizando-registration' && profile?.role === 'administrador') {
     return (
       <RegistrationPage
-        onBack={() => {
-          setRegistrationToEdit(null)
-          setScreen('dashboard')
-        }}
+        onBack={() => setScreen('dashboard')}
         internal
-        editingRecord={registrationToEdit ?? undefined}
-        onUpdated={() => {
-          setRegistrationToEdit(null)
-          setScreen('dashboard')
-        }}
       />
     )
   }
@@ -349,14 +379,7 @@ function App() {
     return (
       <Dashboard
         profile={profile}
-        onNavigateToRegistration={() => {
-          setRegistrationToEdit(null)
-          setScreen('catequizando-registration')
-        }}
-        onEditRegistration={(registration) => {
-          setRegistrationToEdit(registration)
-          setScreen('catequizando-registration')
-        }}
+        onNavigateToRegistration={() => setScreen('catequizando-registration')}
         onNavigateToProfile={() => setScreen('profile')}
         onSignOut={signOut}
         mobileMenuOpen={mobileMenuOpen}
@@ -523,53 +546,14 @@ function LoginPage({
   )
 }
 
-function registrationToForm(registration: RegistrationRow): FormValues {
-  const dateToBrazilian = (value: string | null) => value?.split('-').reverse().join('/') ?? ''
-  return {
-    ...initialForm,
-    fullName: registration.full_name,
-    birthDate: dateToBrazilian(registration.birth_date),
-    cpf: maskCpf(registration.cpf),
-    sex: registration.sex ?? '',
-    maritalStatus: registration.marital_status,
-    postalCode: maskCep(registration.postal_code),
-    street: registration.street,
-    streetNumber: registration.street_number,
-    complement: registration.complement ?? '',
-    neighborhood: registration.neighborhood,
-    city: registration.city,
-    state: registration.state,
-    email: registration.email ?? '',
-    phone: maskPhone(registration.phone ?? ''),
-    referralSource: registration.referral_source,
-    referralOther: registration.referral_other ?? '',
-    registrationReason: registration.registration_reason,
-    reasonOther: registration.reason_other ?? '',
-    sacraments: registration.sacraments,
-    baptismDate: dateToBrazilian(registration.baptism_date),
-    baptismParish: registration.baptism_parish ?? '',
-    baptismCity: registration.baptism_city ?? '',
-    baptismState: registration.baptism_state ?? '',
-    eucharistParish: registration.eucharist_parish ?? '',
-    eucharistCity: registration.eucharist_city ?? '',
-    privacyAcknowledged: true,
-  }
-}
-
 function RegistrationPage({
   onBack,
   internal = false,
-  editingRecord,
-  onUpdated,
 }: {
   onBack: () => void
   internal?: boolean
-  editingRecord?: RegistrationRow
-  onUpdated?: () => void
 }) {
-  const [values, setValues] = useState<FormValues>(() =>
-    editingRecord ? registrationToForm(editingRecord) : initialForm,
-  )
+  const [values, setValues] = useState<FormValues>(initialForm)
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [schedulesLoading, setSchedulesLoading] = useState(false)
   const [certificate, setCertificate] = useState<File | null>(null)
@@ -583,35 +567,18 @@ function RegistrationPage({
     let active = true
     setSchedulesLoading(true)
     const loadFormData = async () => {
-      let scheduleQuery = client
+      const { data, error } = await client
         .from('class_schedules')
-      .select('id, weekday, starts_at, ends_at, classes(name)')
-      .order('weekday')
-      .order('starts_at')
-      if (!editingRecord) {
-        scheduleQuery = scheduleQuery.eq('active', true).eq('available', true)
-      }
-      const { data, error } = await scheduleQuery
+        .select('id, weekday, starts_at, ends_at, classes(name)')
+        .eq('active', true)
+        .eq('available', true)
+        .order('weekday')
+        .order('starts_at')
       if (!active) return
       if (error) {
         setFeedback({ kind: 'error', text: 'Não foi possível carregar os dias disponíveis. Tente novamente mais tarde.' })
       } else {
         setSchedules((data ?? []) as Schedule[])
-      }
-      if (editingRecord) {
-        const { data: preferenceRows, error: preferenceError } = await client
-          .from('registration_preferences')
-          .select('schedule_id')
-          .eq('application_id', editingRecord.id)
-        if (!active) return
-        if (preferenceError) {
-          setFeedback({ kind: 'error', text: 'Não foi possível carregar as preferências de horário deste cadastro.' })
-        } else {
-          setValues((current) => ({
-            ...current,
-            scheduleIds: (preferenceRows ?? []).map((preference) => preference.schedule_id),
-          }))
-        }
       }
       setSchedulesLoading(false)
     }
@@ -619,7 +586,7 @@ function RegistrationPage({
     return () => {
       active = false
     }
-  }, [editingRecord])
+  }, [])
 
   const age = useMemo(() => calculateAge(values.birthDate), [values.birthDate])
   const hasBaptism = values.sacraments.includes('batismo')
@@ -735,7 +702,7 @@ function RegistrationPage({
     }
 
     setLoading(true)
-    let certificatePath: string | null = editingRecord?.marriage_certificate_path ?? null
+    let certificatePath: string | null = null
     if (certificate) {
       const { data: token, error: tokenError } = await supabase.rpc('create_registration_upload_token')
       if (tokenError || !token) {
@@ -790,21 +757,12 @@ function RegistrationPage({
       privacy_acknowledged: values.privacyAcknowledged,
       marriage_certificate_path: certificatePath,
     }
-    const result = editingRecord
-      ? await supabase.rpc('update_catequizando_registration', {
-        p_id: editingRecord.id,
-        p_payload: payload,
-      })
-      : internal
-        ? await supabase.rpc('create_catequizando_registration', { p_payload: payload })
-        : await supabase.rpc('submit_public_registration', { p_payload: payload })
+    const result = internal
+      ? await supabase.rpc('create_catequizando_registration', { p_payload: payload })
+      : await supabase.rpc('submit_public_registration', { p_payload: payload })
     setLoading(false)
     if (result.error) {
       setFeedback({ kind: 'error', text: 'Não foi possível concluir a inscrição. Revise os dados e tente novamente; se o problema persistir, procure a secretaria paroquial.' })
-      return
-    }
-    if (editingRecord) {
-      onUpdated?.()
       return
     }
     setSubmitted(true)
@@ -845,12 +803,12 @@ function RegistrationPage({
       <header className="form-topbar">
         <button className="back-button" onClick={onBack}><ArrowLeft size={17} /> Voltar</button>
         <Brand />
-        <span className="secure-label"><ShieldCheck size={15} /> {editingRecord ? 'EDIÇÃO DE CADASTRO' : 'INSCRIÇÃO SEGURA'}</span>
+        <span className="secure-label"><ShieldCheck size={15} /> INSCRIÇÃO SEGURA</span>
       </header>
       <section className="form-intro">
         <span className="eyebrow"><span /> UM NOVO PASSO NA SUA CAMINHADA</span>
-        <h1>{internal ? <>{editingRecord ? 'Editar' : 'Cadastro de'}<br /><em>catequizando</em></> : <>Inscrição na Catequese<br /><em>de Adultos</em></>}</h1>
-        <p>{editingRecord ? 'Atualize os dados cadastrais do catequizando.' : internal ? 'Preencha os mesmos dados da inscrição para incluir o catequizando no sistema paroquial.' : 'Preencha seus dados com carinho. Eles nos ajudam a acolher você e preparar esse caminho juntos.'}</p>
+        <h1>{internal ? <>Cadastro de<br /><em>catequizando</em></> : <>Inscrição na Catequese<br /><em>de Adultos</em></>}</h1>
+        <p>{internal ? 'Preencha os mesmos dados da inscrição para incluir o catequizando no sistema paroquial.' : 'Preencha seus dados com carinho. Eles nos ajudam a acolher você e preparar esse caminho juntos.'}</p>
         <div className="required-note"><span className="required-mark">*</span> Campos obrigatórios</div>
       </section>
 
@@ -1059,8 +1017,7 @@ function RegistrationPage({
           <div className="privacy-heading"><ShieldCheck size={20} /><strong>Aviso de privacidade</strong></div>
           <p>{privacyNotice}</p>
           <label className="privacy-consent">
-            <input type="checkbox" checked={values.privacyAcknowledged} onChange={(event) => update('privacyAcknowledged', event.target.checked)} required disabled={Boolean(editingRecord)} />
-            <span className="check-box"><Check size={13} /></span>
+            <input type="checkbox" checked={values.privacyAcknowledged} onChange={(event) => update('privacyAcknowledged', event.target.checked)}             required />            <span className="check-box"><Check size={13} /></span>
             <span>Li e estou ciente do aviso de privacidade acima. <b>*</b></span>
           </label>
           <span className="privacy-caption">A data e a hora desta confirmação serão registradas com sua inscrição.</span>
@@ -1068,7 +1025,7 @@ function RegistrationPage({
         <ErrorBanner feedback={feedback} />
         <div className="form-submit">
           <button type="submit" className="button button-primary" disabled={loading || schedulesLoading}>
-            {loading ? <><LoaderCircle className="spin" size={18} /> Salvando...</> : <>{editingRecord ? 'Salvar alterações' : internal ? 'Cadastrar catequizando' : 'Enviar inscrição'} <ArrowRight size={17} /></>}
+            {loading ? <><LoaderCircle className="spin" size={18} /> Salvando...</> : <>{internal ? 'Cadastrar catequizando' : 'Enviar inscrição'} <ArrowRight size={17} /></>}
           </button>
           <span><LockKeyhole size={14} /> Seus dados são enviados por conexão segura.</span>
         </div>
@@ -1202,10 +1159,46 @@ function ProfilePage({
   const [fullName, setFullName] = useState(profile.full_name)
   const [phone, setPhone] = useState(profile.phone ?? '')
   const [email, setEmail] = useState(profile.email)
+  const [address, setAddress] = useState({
+    postalCode: maskCep(profile.address?.postal_code ?? ''),
+    street: profile.address?.street ?? '',
+    streetNumber: profile.address?.street_number ?? '',
+    complement: profile.address?.complement ?? '',
+    neighborhood: profile.address?.neighborhood ?? '',
+    city: profile.address?.city ?? '',
+    state: profile.address?.state ?? '',
+  })
+  const [editing, setEditing] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+
+  const resetForm = () => {
+    setFullName(profile.full_name)
+    setPhone(profile.phone ?? '')
+    setEmail(profile.email)
+    setAddress({
+      postalCode: maskCep(profile.address?.postal_code ?? ''),
+      street: profile.address?.street ?? '',
+      streetNumber: profile.address?.street_number ?? '',
+      complement: profile.address?.complement ?? '',
+      neighborhood: profile.address?.neighborhood ?? '',
+      city: profile.address?.city ?? '',
+      state: profile.address?.state ?? '',
+    })
+    setNewPassword('')
+    setConfirmPassword('')
+  }
+
+  const cancelEditing = () => {
+    resetForm()
+    setFeedback(null)
+    setEditing(false)
+  }
+
+  const updateAddress = (key: keyof typeof address, value: string) =>
+    setAddress((current) => ({ ...current, [key]: value }))
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1213,6 +1206,31 @@ function ProfilePage({
     if (!supabase) {
       setFeedback({ kind: 'error', text: 'Configure o Supabase para atualizar seu perfil.' })
       return
+    }
+    if (!fullName.trim()) {
+      setFeedback({ kind: 'error', text: 'Informe seu nome completo.' })
+      return
+    }
+    if (!/^\d{10,11}$/.test(digits(phone))) {
+      setFeedback({ kind: 'error', text: 'Informe um telefone válido com DDD.' })
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setFeedback({ kind: 'error', text: 'Informe um e-mail válido.' })
+      return
+    }
+    if (profile.address) {
+      if (
+        digits(address.postalCode).length !== 8 ||
+        !address.street.trim() ||
+        !address.streetNumber.trim() ||
+        !address.neighborhood.trim() ||
+        !address.city.trim() ||
+        !/^[A-Za-z]{2}$/.test(address.state.trim())
+      ) {
+        setFeedback({ kind: 'error', text: 'Preencha o endereço completo: CEP, rua, número, bairro, cidade e UF.' })
+        return
+      }
     }
     if (newPassword && newPassword.length < 8) {
       setFeedback({ kind: 'error', text: 'A nova senha deve ter pelo menos 8 caracteres.' })
@@ -1223,13 +1241,25 @@ function ProfilePage({
       return
     }
     setLoading(true)
+    const updatedAddress: ProfileAddress | null = profile.address
+      ? {
+        postal_code: digits(address.postalCode),
+        street: address.street.trim(),
+        street_number: address.streetNumber.trim(),
+        complement: address.complement.trim() || null,
+        neighborhood: address.neighborhood.trim(),
+        city: address.city.trim(),
+        state: address.state.trim().toUpperCase(),
+      }
+      : null
     const { error: profileError } = await supabase.rpc('update_own_profile', {
       p_full_name: fullName.trim(),
       p_phone: digits(phone),
+      p_address: updatedAddress,
     })
     if (profileError) {
       setLoading(false)
-      setFeedback({ kind: 'error', text: 'Não foi possível atualizar seu nome e telefone. Tente novamente.' })
+      setFeedback({ kind: 'error', text: 'Não foi possível atualizar seus dados. Revise as informações e tente novamente.' })
       return
     }
     const updatedName = fullName.trim()
@@ -1239,6 +1269,7 @@ function ProfilePage({
     })
     if (metadataError) {
       setLoading(false)
+      onProfileUpdated({ ...profile, full_name: updatedName, phone: updatedPhone, address: updatedAddress })
       setFeedback({ kind: 'error', text: 'Os dados foram atualizados no cadastro, mas não foi possível sincronizar o perfil da conta.' })
       return
     }
@@ -1249,8 +1280,8 @@ function ProfilePage({
       const { data, error } = await supabase.auth.updateUser({ email: email.trim().toLowerCase() })
       if (error) {
         setLoading(false)
-        onProfileUpdated({ ...profile, full_name: updatedName, phone: updatedPhone })
-        setFeedback({ kind: 'error', text: 'Nome e telefone foram salvos, mas não foi possível solicitar a alteração do e-mail.' })
+        onProfileUpdated({ ...profile, full_name: updatedName, phone: updatedPhone, address: updatedAddress })
+        setFeedback({ kind: 'error', text: 'Os demais dados foram salvos, mas não foi possível solicitar a alteração do e-mail.' })
         return
       }
       updatedEmail = data.user.email ?? profile.email
@@ -1261,12 +1292,10 @@ function ProfilePage({
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) {
         setLoading(false)
-        onProfileUpdated({ ...profile, full_name: updatedName, phone: updatedPhone, email: updatedEmail })
+        onProfileUpdated({ ...profile, full_name: updatedName, phone: updatedPhone, email: updatedEmail, address: updatedAddress })
         setFeedback({
           kind: 'error',
-          text: emailNeedsConfirmation
-            ? 'Nome, telefone e solicitação do e-mail foram processados, mas não foi possível atualizar a senha.'
-            : 'Nome e telefone foram salvos, mas não foi possível atualizar a senha.',
+          text: 'Os dados foram salvos, mas não foi possível atualizar a senha.',
         })
         return
       }
@@ -1277,11 +1306,14 @@ function ProfilePage({
       full_name: updatedName,
       phone: updatedPhone,
       email: updatedEmail,
+      address: updatedAddress,
     }
     onProfileUpdated(updatedProfile)
+    setEmail(updatedEmail)
     setNewPassword('')
     setConfirmPassword('')
     setLoading(false)
+    setEditing(false)
     setFeedback({
       kind: 'success',
       text: emailNeedsConfirmation
@@ -1304,41 +1336,262 @@ function ProfilePage({
           <p>Atualize seus dados pessoais e mantenha sua senha protegida.</p>
         </div>
         <form className="profile-form" onSubmit={(event) => void saveProfile(event)}>
-          <section className="form-section">
-            <SectionHeading number="01" icon={<UserRound size={20} />} title="Dados pessoais" description="Seus dados ajudam a equipe paroquial a manter contato." />
-            <div className="form-grid">
-              <Field label="Nome completo" required className="span-2">
-                <input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required maxLength={150} />
-              </Field>
-              <Field label="Telefone celular" hint="Com DDD">
-                <input type="tel" inputMode="tel" autoComplete="tel-national" value={maskPhone(phone)} onChange={(event) => setPhone(maskPhone(event.target.value))} placeholder="(11) 99999-9999" maxLength={16} />
-              </Field>
-              <Field label="E-mail" required hint="A alteração será confirmada por e-mail">
-                <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} />
-              </Field>
-            </div>
-          </section>
-          <section className="form-section">
-            <SectionHeading number="02" icon={<LockKeyhole size={20} />} title="Alterar senha" description="Deixe os campos em branco se não quiser alterar sua senha." />
-            <div className="form-grid">
-              <Field label="Nova senha" hint="Mínimo de 8 caracteres">
-                <input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} />
-              </Field>
-              <Field label="Confirmar nova senha">
-                <input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} />
-              </Field>
-            </div>
-          </section>
+          <fieldset className="profile-fieldset" disabled={!editing || loading}>
+            <section className="form-section">
+              <SectionHeading number="01" icon={<UserRound size={20} />} title="Dados pessoais" description="Seus dados ajudam a equipe paroquial a manter contato." />
+              <div className="form-grid">
+                <Field label="Nome completo" required className="span-2">
+                  <input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required maxLength={150} />
+                </Field>
+                {profile.cpf && (
+                  <Field label="CPF" hint="Somente consulta">
+                    <input value={maskCpf(profile.cpf)} readOnly disabled />
+                  </Field>
+                )}
+                {profile.birth_date && (
+                  <Field label="Data de nascimento" hint="Somente consulta">
+                    <input value={profile.birth_date.split('-').reverse().join('/')} readOnly disabled />
+                  </Field>
+                )}
+                <Field label="Telefone celular" required hint="Com DDD">
+                  <input type="tel" inputMode="tel" autoComplete="tel-national" value={maskPhone(phone)} onChange={(event) => setPhone(maskPhone(event.target.value))} placeholder="(11) 99999-9999" maxLength={16} required />
+                </Field>
+                <Field label="E-mail" required hint="A alteração será confirmada por e-mail">
+                  <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} />
+                </Field>
+              </div>
+            </section>
+            {profile.address && (
+              <section className="form-section">
+                <SectionHeading number="02" icon={<MapPin size={20} />} title="Endereço" description="Mantenha seu endereço completo atualizado." />
+                <div className="form-grid">
+                  <Field label="CEP" required>
+                    <input inputMode="numeric" autoComplete="postal-code" value={address.postalCode} onChange={(event) => updateAddress('postalCode', maskCep(event.target.value))} placeholder="00000-000" maxLength={9} required />
+                  </Field>
+                  <Field label="Rua" required className="span-2">
+                    <input autoComplete="address-line1" value={address.street} onChange={(event) => updateAddress('street', event.target.value)} required maxLength={150} />
+                  </Field>
+                  <Field label="Número" required>
+                    <input value={address.streetNumber} onChange={(event) => updateAddress('streetNumber', event.target.value)} required maxLength={20} />
+                  </Field>
+                  <Field label="Complemento">
+                    <input autoComplete="address-line2" value={address.complement} onChange={(event) => updateAddress('complement', event.target.value)} maxLength={100} />
+                  </Field>
+                  <Field label="Bairro" required>
+                    <input value={address.neighborhood} onChange={(event) => updateAddress('neighborhood', event.target.value)} required maxLength={100} />
+                  </Field>
+                  <Field label="Cidade" required>
+                    <input autoComplete="address-level2" value={address.city} onChange={(event) => updateAddress('city', event.target.value)} required maxLength={100} />
+                  </Field>
+                  <Field label="UF" required>
+                    <input autoComplete="address-level1" value={address.state} onChange={(event) => updateAddress('state', event.target.value.toUpperCase())} required maxLength={2} />
+                  </Field>
+                </div>
+              </section>
+            )}
+            {editing && (
+              <section className="form-section">
+                <SectionHeading number={profile.address ? '03' : '02'} icon={<LockKeyhole size={20} />} title="Alterar senha" description="Deixe os campos em branco se não quiser alterar sua senha." />
+                <div className="form-grid">
+                  <Field label="Nova senha" hint="Mínimo de 8 caracteres">
+                    <input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} />
+                  </Field>
+                  <Field label="Confirmar nova senha">
+                    <input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} />
+                  </Field>
+                </div>
+              </section>
+            )}
+          </fieldset>
           <ErrorBanner feedback={feedback} />
           <div className="profile-actions">
-            <button type="submit" className="button button-primary" disabled={loading}>
-              {loading ? <><LoaderCircle className="spin" size={17} /> Salvando...</> : <>Salvar alterações <Check size={16} /></>}
-            </button>
+            {editing ? (
+              <>
+                <button type="submit" className="button button-primary" disabled={loading}>
+                  {loading ? <><LoaderCircle className="spin" size={17} /> Salvando...</> : <>Salvar alterações <Check size={16} /></>}
+                </button>
+                <button type="button" className="button button-outline" onClick={cancelEditing} disabled={loading}>Cancelar</button>
+              </>
+            ) : (
+              <button type="button" className="button button-primary" onClick={() => { setFeedback(null); setEditing(true) }}>
+                Editar perfil <Pencil size={16} />
+              </button>
+            )}
           </div>
         </form>
       </div>
       <footer className="form-footer">PARÓQUIA SÃO JOSÉ <span>·</span> CATEQUESE DE ADULTOS</footer>
     </main>
+  )
+}
+
+const sexLabels: Record<string, string> = {
+  feminino: 'Feminino',
+  masculino: 'Masculino',
+  outro: 'Outro',
+  prefiro_nao_informar: 'Prefiro não informar',
+}
+const maritalStatusLabels: Record<string, string> = {
+  solteiro: 'Solteiro(a)',
+  casado_igreja: 'Casado(a) na Igreja',
+  casado_civil: 'Casado(a) no civil',
+  divorciado: 'Divorciado(a)',
+  viuvo: 'Viúvo(a)',
+  outro: 'Outro',
+}
+const referralSourceLabels: Record<string, string> = {
+  amigos_familiares: 'Indicação de amigos/familiares',
+  missas: 'Durante as missas',
+  catequese_infantil: 'Através da catequese infantil',
+  outro: 'Outro',
+}
+const registrationReasonLabels: Record<string, string> = {
+  preparacao_casamento: 'Preparação para o casamento',
+  receber_sacramentos: 'Gostaria de receber os sacramentos que ainda não tenho',
+  ouvinte: 'Tenho todos os sacramentos, mas gostaria de ser ouvinte',
+  acompanhar_filho: 'Acompanhar meu(minha) filho(a) na catequese',
+  outro: 'Outro',
+}
+const sacramentLabels: Record<string, string> = {
+  nenhum: 'Nenhum',
+  batismo: 'Batismo',
+  primeira_eucaristia: '1ª Eucaristia',
+  crisma: 'Crisma',
+}
+
+function RegistrationSummary({
+  registration,
+  classLabel,
+}: {
+  registration: RegistrationRow
+  classLabel: string | undefined
+}) {
+  return (
+    <div className="application-person">
+      <span className="application-avatar">{registration.full_name.slice(0, 1).toUpperCase()}</span>
+      <div className="application-info">
+        <strong className="application-name">{registration.full_name || 'Nome não informado'}</strong>
+        <div className="application-contact-details">
+          <div><small>Telefone</small><strong>{registration.phone ? maskPhone(registration.phone) : 'Não informado'}</strong></div>
+          <div><small>E-mail</small><strong>{registration.email || 'Não informado'}</strong></div>
+          <div><small>Turma</small><strong>{classLabel ?? 'Sem turma'}</strong></div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RegistrationDetailsModal({
+  registration,
+  classLabel,
+  preferences,
+  onClose,
+}: {
+  registration: RegistrationRow
+  classLabel: string | undefined
+  preferences: RegistrationPreference[]
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+
+  const date = (value: string | null) => value ? value.split('-').reverse().join('/') : null
+  const fields: { section: string; items: [string, string | null | undefined][] }[] = [
+    {
+      section: 'Dados pessoais',
+      items: [
+        ['Nome completo', registration.full_name],
+        ['CPF', maskCpf(registration.cpf)],
+        ['Data de nascimento', date(registration.birth_date)],
+        ['Sexo', registration.sex ? sexLabels[registration.sex] ?? registration.sex : null],
+        ['Estado civil', maritalStatusLabels[registration.marital_status] ?? registration.marital_status],
+        ['Telefone', registration.phone ? maskPhone(registration.phone) : null],
+        ['E-mail', registration.email],
+      ],
+    },
+    {
+      section: 'Endereço',
+      items: [
+        ['CEP', maskCep(registration.postal_code)],
+        ['Rua', registration.street],
+        ['Número', registration.street_number],
+        ['Complemento', registration.complement],
+        ['Bairro', registration.neighborhood],
+        ['Cidade', registration.city],
+        ['UF', registration.state],
+      ],
+    },
+    {
+      section: 'Inscrição',
+      items: [
+        ['Como conheceu a catequese', referralSourceLabels[registration.referral_source] ?? registration.referral_source],
+        ['Outra forma de conhecimento', registration.referral_other],
+        ['Motivo da inscrição', registrationReasonLabels[registration.registration_reason] ?? registration.registration_reason],
+        ['Outro motivo', registration.reason_other],
+        ['Turma', classLabel ?? 'Sem turma'],
+        ['Preferências de horário', preferences.length
+          ? preferences.map((preference) =>
+            `${weekdays[preference.weekday]} ${preference.starts_at.slice(0, 5)}–${preference.ends_at.slice(0, 5)} · ${preference.classes?.name ?? 'Turma'}`,
+          ).join('; ')
+          : 'Sem preferência de horário'],
+        ['Data da inscrição', formatDateTime(registration.created_at)],
+        ['Ciência do aviso de privacidade', formatDateTime(registration.privacy_acknowledged_at)],
+        ['Usuário do sistema', registration.user_id ? 'Criado' : 'Não criado'],
+      ],
+    },
+    {
+      section: 'Sacramentos',
+      items: [
+        ['Sacramentos recebidos', registration.sacraments.map((item) => sacramentLabels[item] ?? item).join(', ')],
+        ['Data do batismo', date(registration.baptism_date)],
+        ['Paróquia do batismo', registration.baptism_parish],
+        ['Cidade do batismo', registration.baptism_city],
+        ['UF do batismo', registration.baptism_state],
+        ['Paróquia da 1ª Eucaristia', registration.eucharist_parish],
+        ['Cidade da 1ª Eucaristia', registration.eucharist_city],
+        ['Comprovante de matrimônio', registration.marriage_certificate_path ? 'Anexado' : 'Sem anexo'],
+      ],
+    },
+  ]
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="registration-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="registration-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="registration-modal-header">
+          <div>
+            <span className="eyebrow">CADASTRO COMPLETO · SOMENTE LEITURA</span>
+            <h2 id="registration-modal-title">{registration.full_name}</h2>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
+        </header>
+        <div className="registration-modal-body">
+          {fields.map((group) => (
+            <section key={group.section}>
+              <h3>{group.section}</h3>
+              <dl>
+                {group.items.map(([label, value]) => (
+                  <div key={label}><dt>{label}</dt><dd>{value || 'Não informado'}</dd></div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+        <footer className="registration-modal-footer">
+          <button type="button" className="button button-primary" onClick={onClose}>Fechar</button>
+        </footer>
+      </div>
+    </div>
   )
 }
 
@@ -1349,7 +1602,6 @@ function Dashboard({
   onToggleMenu,
   onCloseMenu,
   onNavigateToRegistration,
-  onEditRegistration,
   onNavigateToProfile,
 }: {
   profile: AuthenticatedProfile
@@ -1358,7 +1610,6 @@ function Dashboard({
   onToggleMenu: () => void
   onCloseMenu: () => void
   onNavigateToRegistration: () => void
-  onEditRegistration: (registration: RegistrationRow) => void
   onNavigateToProfile: () => void
 }) {
   const [applications, setApplications] = useState<RegistrationRow[]>([])
@@ -1366,9 +1617,11 @@ function Dashboard({
   const [catechists, setCatechists] = useState<CatechistRecord[]>([])
   const [adminSchedules, setAdminSchedules] = useState<AdminSchedule[]>([])
   const [classes, setClasses] = useState<{ id: string; name: string; active: boolean }[]>([])
-  const [activeSection, setActiveSection] = useState<'applications' | 'schedules' | 'catechists' | 'profiles'>('applications')
+  const [activeSection, setActiveSection] = useState<'applications' | 'catequizandos' | 'schedules' | 'catechists' | 'profiles'>('applications')
+  const [viewingRegistration, setViewingRegistration] = useState<RegistrationRow | null>(null)
   const [catechistName, setCatechistName] = useState('')
   const [catechistPhone, setCatechistPhone] = useState('')
+  const [catechistCpf, setCatechistCpf] = useState('')
   const [catechistClassId, setCatechistClassId] = useState('')
   const [catechistEmail, setCatechistEmail] = useState('')
   const [catechistInitialPassword, setCatechistInitialPassword] = useState('')
@@ -1378,6 +1631,7 @@ function Dashboard({
   const [inviteName, setInviteName] = useState('')
   const [invitePhone, setInvitePhone] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteCpf, setInviteCpf] = useState('')
   const [inviteClassId, setInviteClassId] = useState('')
   const [inviteRole, setInviteRole] = useState<UserRole>('catequizando')
   const [systemProfiles, setSystemProfiles] = useState<UserDirectoryProfile[]>([])
@@ -1445,7 +1699,7 @@ function Dashboard({
           { data: catequizandoRows, error: catequizandoError },
           { data: scheduleRows, error: scheduleError },
         ] = await Promise.all([
-          client.from('t_catequista').select('id, full_name, phone, class_id').order('full_name'),
+          client.from('t_catequista').select('id, full_name, phone, email, cpf, class_id').order('full_name'),
           client.from('profiles').select('id, role').order('role'),
           client.from('t_catequizando').select('user_id, full_name').order('created_at', { ascending: false }),
           client.from('class_schedules').select('id, class_id, weekday, starts_at, ends_at, active, available, classes(name)').order('weekday'),
@@ -1778,23 +2032,44 @@ function Dashboard({
     setFeedback({ kind: 'success', text: `Turma ${classItem.active ? 'desativada' : 'ativada'}.` })
   }
 
+  const resetCatechistForm = () => {
+    setEditingCatechistId(null)
+    setCatechistName('')
+    setCatechistPhone('')
+    setCatechistCpf('')
+    setCatechistClassId('')
+    setCatechistEmail('')
+    setCatechistInitialPassword('')
+    setCatechistConfirmPassword('')
+  }
+
   const registerCatechist = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!supabase || profile.role !== 'administrador') return
     if (editingCatechistId) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(catechistEmail.trim())) {
+        setFeedback({ kind: 'error', text: 'Informe um e-mail válido para o catequista.' })
+        return
+      }
+      if (!isValidCpf(catechistCpf)) {
+        setFeedback({ kind: 'error', text: 'Informe um CPF válido para o catequista.' })
+        return
+      }
       setCatechistLoading(true)
       setFeedback(null)
-      const { error } = await supabase
-        .from('t_catequista')
-        .update({
+      const { error } = await supabase.functions.invoke('update-catechist', {
+        body: {
+          id: editingCatechistId,
           full_name: catechistName.trim(),
+          email: catechistEmail.trim(),
           phone: digits(catechistPhone),
+          cpf: digits(catechistCpf),
           class_id: catechistClassId || null,
-        })
-        .eq('id', editingCatechistId)
+        },
+      })
       setCatechistLoading(false)
       if (error) {
-        setFeedback({ kind: 'error', text: 'Não foi possível atualizar o cadastro do catequista.' })
+        setFeedback({ kind: 'error', text: await functionErrorMessage(error, 'Não foi possível atualizar o cadastro do catequista.') })
         return
       }
       setCatechists((current) => current.map((item) => item.id === editingCatechistId
@@ -1802,6 +2077,8 @@ function Dashboard({
           ...item,
           full_name: catechistName.trim(),
           phone: digits(catechistPhone),
+          email: catechistEmail.trim().toLowerCase(),
+          cpf: digits(catechistCpf),
           class_id: catechistClassId || null,
         }
         : item,
@@ -1810,11 +2087,12 @@ function Dashboard({
         ? { ...item, full_name: catechistName.trim() }
         : item,
       ))
-      setEditingCatechistId(null)
-      setCatechistName('')
-      setCatechistPhone('')
-      setCatechistClassId('')
+      resetCatechistForm()
       setFeedback({ kind: 'success', text: 'Cadastro do catequista atualizado.' })
+      return
+    }
+    if (!isValidCpf(catechistCpf)) {
+      setFeedback({ kind: 'error', text: 'Informe um CPF válido para o catequista.' })
       return
     }
     if (catechistInitialPassword.length < 8) {
@@ -1832,6 +2110,7 @@ function Dashboard({
         full_name: catechistName.trim(),
         email: catechistEmail.trim(),
         phone: digits(catechistPhone),
+        cpf: digits(catechistCpf),
         class_id: catechistClassId || null,
         role: 'catequista',
         send_invite: false,
@@ -1840,19 +2119,15 @@ function Dashboard({
     })
     setCatechistLoading(false)
     if (error || !data?.id) {
-      let message = 'Não foi possível cadastrar o catequista. Verifique a integração e tente novamente.'
-      const context = (error as { context?: Response } | null)?.context
-      if (context && typeof context.json === 'function') {
-        const body = await context.json().catch(() => null) as { error?: string } | null
-        if (body?.error) message = body.error
-      }
-      setFeedback({ kind: 'error', text: message })
+      setFeedback({ kind: 'error', text: await functionErrorMessage(error, 'Não foi possível cadastrar o catequista. Verifique a integração e tente novamente.') })
       return
     }
     const newCatechist: CatechistRecord = {
       id: data.id,
       full_name: catechistName.trim(),
       phone: digits(catechistPhone),
+      email: catechistEmail.trim().toLowerCase(),
+      cpf: digits(catechistCpf),
       class_id: catechistClassId || null,
     }
     setCatechists((current) =>
@@ -1862,12 +2137,7 @@ function Dashboard({
       [...current, { id: data.id, role: 'catequista' as const, full_name: newCatechist.full_name }]
         .sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')),
     )
-    setCatechistName('')
-    setCatechistPhone('')
-    setCatechistClassId('')
-    setCatechistEmail('')
-    setCatechistInitialPassword('')
-    setCatechistConfirmPassword('')
+    resetCatechistForm()
     setFeedback({ kind: 'success', text: 'Catequista cadastrado. No primeiro acesso, será necessário trocar a senha inicial.' })
   }
 
@@ -1886,18 +2156,17 @@ function Dashboard({
     }
     setCatechists((current) => current.filter((item) => item.id !== catechist.id))
     setSystemProfiles((current) => current.filter((item) => item.id !== catechist.id))
-    if (editingCatechistId === catechist.id) {
-      setEditingCatechistId(null)
-      setCatechistName('')
-      setCatechistPhone('')
-      setCatechistClassId('')
-    }
+    if (editingCatechistId === catechist.id) resetCatechistForm()
     setFeedback({ kind: 'success', text: 'Catequista e conta de acesso excluídos.' })
   }
 
   const inviteProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!supabase || profile.role !== 'administrador') return
+    if (inviteRole === 'catequista' && !isValidCpf(inviteCpf)) {
+      setFeedback({ kind: 'error', text: 'Informe um CPF válido para o catequista.' })
+      return
+    }
     setProfileInviteLoading(true)
     setFeedback(null)
     const { data, error } = await supabase.functions.invoke<{ id: string; role: UserRole }>('invite-catechist', {
@@ -1905,13 +2174,14 @@ function Dashboard({
         full_name: inviteName.trim(),
         email: inviteEmail.trim(),
         phone: digits(invitePhone),
+        cpf: inviteRole === 'catequista' ? digits(inviteCpf) : undefined,
         class_id: inviteRole === 'catequista' ? inviteClassId || null : null,
         role: inviteRole,
       },
     })
     setProfileInviteLoading(false)
     if (error || !data?.id || data.role !== inviteRole) {
-      setFeedback({ kind: 'error', text: 'Não foi possível criar o perfil. Confira os dados e tente novamente.' })
+      setFeedback({ kind: 'error', text: await functionErrorMessage(error, 'Não foi possível criar o perfil. Confira os dados e tente novamente.') })
       return
     }
     const newProfile: UserDirectoryProfile = {
@@ -1928,6 +2198,8 @@ function Dashboard({
           id: newProfile.id,
           full_name: newProfile.full_name,
           phone: digits(invitePhone),
+          email: inviteEmail.trim().toLowerCase(),
+          cpf: digits(inviteCpf),
           class_id: inviteClassId || null,
         }].sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')),
       )
@@ -1935,6 +2207,7 @@ function Dashboard({
     setInviteName('')
     setInvitePhone('')
     setInviteEmail('')
+    setInviteCpf('')
     setFeedback({
       kind: 'success',
       text: `Convite enviado. O usuário receberá acesso como ${roles[data.role].toLocaleLowerCase('pt-BR')} após aceitar o convite.`,
@@ -1956,9 +2229,11 @@ function Dashboard({
         </div>
         <div className="sidebar-section-label">ESPAÇO DE TRABALHO</div>
         <button className={`sidebar-nav-item ${activeSection === 'applications' ? 'active' : ''}`} onClick={() => { setActiveSection('applications'); onCloseMenu() }}><UsersRound size={18} /> {profile.role === 'administrador' ? 'Inscrições' : roles[profile.role]}</button>
+        {profile.role !== 'catequizando' && (
+          <button className={`sidebar-nav-item ${activeSection === 'catequizandos' ? 'active' : ''}`} onClick={() => { setActiveSection('catequizandos'); onCloseMenu() }}><Search size={18} /> Consultar catequizando</button>
+        )}
         {profile.role === 'administrador' && (
           <>
-            <button className="sidebar-nav-item" onClick={onNavigateToRegistration}><UserPlus size={18} /> Cadastrar catequizando</button>
             <button className={`sidebar-nav-item ${activeSection === 'catechists' ? 'active' : ''}`} onClick={() => { setActiveSection('catechists'); onCloseMenu() }}><UserPlus size={18} /> Cadastrar catequista</button>
             <button className={`sidebar-nav-item ${activeSection === 'profiles' ? 'active' : ''}`} onClick={() => { setActiveSection('profiles'); onCloseMenu() }}><ShieldCheck size={18} /> Perfis de acesso</button>
             <button className={`sidebar-nav-item ${activeSection === 'schedules' ? 'active' : ''}`} onClick={() => { setActiveSection('schedules'); onCloseMenu() }}><Clock3 size={18} /> Turmas e horários</button>
@@ -2076,10 +2351,12 @@ function Dashboard({
               <div className="management-grid catechist-management-grid">
                 <form className="management-card" onSubmit={(event) => void registerCatechist(event)}>
                   <h3>{editingCatechistId ? 'Editar catequista' : 'Novo catequista'}</h3>
-                  <p>{editingCatechistId ? 'Atualize o nome, o telefone e a turma do catequista.' : 'Associe o catequista a uma turma; vários catequistas podem acompanhar a mesma turma.'}</p>
+                  <p>{editingCatechistId ? 'Atualize os dados do catequista. Alterar o e-mail também altera o e-mail de acesso.' : 'Associe o catequista a uma turma; vários catequistas podem acompanhar a mesma turma.'}</p>
                   <div className="management-fields">
                     <label className="span-all">Nome<input autoComplete="name" value={catechistName} onChange={(event) => setCatechistName(event.target.value)} required maxLength={150} /></label>
+                    <label>CPF<input inputMode="numeric" value={maskCpf(catechistCpf)} onChange={(event) => setCatechistCpf(maskCpf(event.target.value))} placeholder="000.000.000-00" required maxLength={14} /></label>
                     <label>Telefone<input type="tel" inputMode="tel" autoComplete="tel-national" value={catechistPhone} onChange={(event) => setCatechistPhone(maskPhone(event.target.value))} placeholder="(11) 99999-9999" required maxLength={16} /></label>
+                    <label className="span-all">E-mail<input type="email" autoComplete="email" value={catechistEmail} onChange={(event) => setCatechistEmail(event.target.value)} required maxLength={254} /></label>
                     <label className="span-all">Turma
                       <select value={catechistClassId} onChange={(event) => setCatechistClassId(event.target.value)}>
                         <option value="">Sem turma associada</option>
@@ -2089,7 +2366,6 @@ function Dashboard({
                       </select>
                     </label>
                     {!editingCatechistId && <>
-                      <label>E-mail<input type="email" autoComplete="email" value={catechistEmail} onChange={(event) => setCatechistEmail(event.target.value)} required maxLength={254} /></label>
                       <label>Senha do primeiro acesso<input type="password" autoComplete="new-password" value={catechistInitialPassword} onChange={(event) => setCatechistInitialPassword(event.target.value)} required minLength={8} /></label>
                       <label>Confirmar senha<input type="password" autoComplete="new-password" value={catechistConfirmPassword} onChange={(event) => setCatechistConfirmPassword(event.target.value)} required minLength={8} /></label>
                     </>}
@@ -2098,20 +2374,25 @@ function Dashboard({
                   <button className="button button-primary" type="submit" disabled={catechistLoading}>
                     {catechistLoading ? <><LoaderCircle className="spin" size={16} /> Salvando...</> : <>{editingCatechistId ? 'Salvar alterações' : 'Cadastrar'} <ArrowRight size={15} /></>}
                   </button>
-                  {editingCatechistId && <button className="button button-outline" type="button" onClick={() => { setEditingCatechistId(null); setCatechistName(''); setCatechistPhone(''); setCatechistClassId('') }}>Cancelar edição</button>}
+                  {editingCatechistId && <button className="button button-outline" type="button" onClick={resetCatechistForm}>Cancelar edição</button>}
                 </form>
                 <div className="management-card catechist-directory">
                   <h3>Catequistas cadastrados</h3>
                   <p>Contas com perfil de catequista.</p>
                   {catechists.length === 0 ? <span className="empty-class-list">Nenhum catequista cadastrado.</span> : catechists.map((catechist) => (
-                    <div className="class-list-row" key={catechist.id}>
-                      <span>{catechist.full_name}</span>
+                    <div className="class-list-row catechist-row" key={catechist.id}>
+                      <span className="catechist-identity">
+                        <strong>{catechist.full_name}</strong>
+                        <small>{catechist.email || 'E-mail não informado'}{catechist.cpf ? ` · CPF ${maskCpf(catechist.cpf)}` : ' · CPF não informado'}</small>
+                      </span>
                       <div className="row-actions">
                         <small>Catequista</small>
                         <button type="button" onClick={() => {
                           setEditingCatechistId(catechist.id)
                           setCatechistName(catechist.full_name)
                           setCatechistPhone(maskPhone(catechist.phone ?? ''))
+                          setCatechistEmail(catechist.email ?? '')
+                          setCatechistCpf(catechist.cpf ?? '')
                           setCatechistClassId(catechist.class_id ?? '')
                         }} aria-label={`Editar catequista ${catechist.full_name}`} title="Editar catequista"><Pencil size={14} /></button>
                         <button type="button" disabled={deletingCatechistId === catechist.id} onClick={() => void deleteCatechist(catechist)} aria-label={`Excluir catequista ${catechist.full_name}`} title="Excluir catequista">
@@ -2145,6 +2426,9 @@ function Dashboard({
                         <option value="administrador">Administrador</option>
                       </select>
                     </label>
+                    {inviteRole === 'catequista' && (
+                      <label className="span-all">CPF<input inputMode="numeric" value={maskCpf(inviteCpf)} onChange={(event) => setInviteCpf(maskCpf(event.target.value))} placeholder="000.000.000-00" required maxLength={14} /></label>
+                    )}
                     {inviteRole === 'catequista' && (
                       <label className="span-all">Turma
                         <select value={inviteClassId} onChange={(event) => setInviteClassId(event.target.value)}>
@@ -2198,19 +2482,10 @@ function Dashboard({
                   <div className="application-list">
                     {filteredApplications.map((application) => (
                       <article className="application-row" key={application.id}>
-                        <div className="application-person">
-                          <span className="application-avatar">{application.full_name.slice(0, 1).toUpperCase()}</span>
-                          <div className="application-info">
-                            <strong className="application-name">{application.full_name || 'Nome não informado'}</strong>
-                            <div className="application-contact-details">
-                              <div><small>Telefone</small><strong>{application.phone || 'Não informado'}</strong></div>
-                              <div><small>E-mail</small><strong>{application.email || 'Não informado'}</strong></div>
-                              <div><small>Turma</small><strong>
-                              {classes.find((classItem) => classItem.id === application.assigned_class_id)?.name ?? 'Sem turma'}
-                              </strong></div>
-                            </div>
-                          </div>
-                        </div>
+                        <RegistrationSummary
+                          registration={application}
+                          classLabel={classes.find((classItem) => classItem.id === application.assigned_class_id)?.name}
+                        />
                         <span className="application-date">{formatDateTime(application.created_at)}</span>
                         {preferences[application.id]?.length ? (
                           <span className="application-preferences">
@@ -2241,6 +2516,9 @@ function Dashboard({
                             Comprovante
                           </button>
                         ) : <span className="no-document">Sem anexo</span>}
+                        <button type="button" className="button button-outline view-registration-button" onClick={() => setViewingRegistration(application)}>
+                          <Eye size={15} /> Visualizar cadastro
+                        </button>
                         {profile.role === 'administrador' && (
                           <div className="row-actions registration-actions">
                             {application.user_id ? (
@@ -2300,7 +2578,6 @@ function Dashboard({
                                 Criar usuário sistema
                               </button>
                             )}
-                            <button type="button" onClick={() => onEditRegistration(application)} aria-label={`Editar cadastro de ${application.full_name}`} title="Editar catequizando"><Pencil size={15} /></button>
                             <button type="button" onClick={() => void deleteCatequizando(application)} aria-label={`Excluir cadastro de ${application.full_name}`} title="Excluir catequizando"><Trash2 size={15} /></button>
                           </div>
                         )}
@@ -2310,6 +2587,54 @@ function Dashboard({
                 )}
               </div>
             </>
+          )}
+          {activeSection === 'catequizandos' && profile.role !== 'catequizando' && (
+            <>
+              <div className="dashboard-section-title">
+                <div><h2>Consultar catequizando</h2><p>Consulte os dados dos catequizandos cadastrados. Os cadastros são somente para leitura.</p></div>
+                <span className="count-pill">{applications.length} {applications.length === 1 ? 'pessoa' : 'pessoas'}</span>
+              </div>
+              <div className="applications-card">
+                <div className="table-toolbar">
+                  <div className="table-search">
+                    <UserRound size={17} />
+                    <input aria-label="Buscar catequizando" placeholder="Buscar por nome..." value={search} onChange={(event) => setSearch(event.target.value)} />
+                  </div>
+                  {profile.role === 'administrador' && (
+                    <button className="button button-outline" type="button" onClick={onNavigateToRegistration}><UserPlus size={15} /> Novo catequizando</button>
+                  )}
+                  <span className="private-data-note"><ShieldCheck size={15} /> Acesso restrito</span>
+                </div>
+                {loading ? (
+                  <div className="dashboard-empty"><LoaderCircle className="spin" size={22} /> Carregando catequizandos...</div>
+                ) : filteredApplications.length === 0 ? (
+                  <div className="dashboard-empty"><UsersRound size={25} /><strong>Nenhum catequizando encontrado</strong><span>Os catequizandos autorizados para você aparecerão nesta lista.</span></div>
+                ) : (
+                  <div className="application-list">
+                    {filteredApplications.map((application) => (
+                      <article className="application-row" key={application.id}>
+                        <RegistrationSummary
+                          registration={application}
+                          classLabel={classes.find((classItem) => classItem.id === application.assigned_class_id)?.name}
+                        />
+                        <span className="application-date">{formatDateTime(application.created_at)}</span>
+                        <button type="button" className="button button-outline view-registration-button" onClick={() => setViewingRegistration(application)}>
+                          <Eye size={15} /> Visualizar cadastro completo
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          {viewingRegistration && (
+            <RegistrationDetailsModal
+              registration={viewingRegistration}
+              classLabel={classes.find((classItem) => classItem.id === viewingRegistration.assigned_class_id)?.name}
+              preferences={preferences[viewingRegistration.id] ?? []}
+              onClose={() => setViewingRegistration(null)}
+            />
           )}
           {activeSection === 'applications' && profile.role === 'catequizando' && (
             <section className="own-application-card">

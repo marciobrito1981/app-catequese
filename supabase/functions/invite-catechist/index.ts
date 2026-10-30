@@ -5,6 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+function isValidCpf(value: string) {
+  if (!/^\d{11}$/.test(value) || /^(\d)\1{10}$/.test(value)) return false
+  for (const length of [9, 10]) {
+    let sum = 0
+    for (let index = 0; index < length; index++) sum += Number(value[index]) * (length + 1 - index)
+    if (((sum * 10) % 11) % 10 !== Number(value[length])) return false
+  }
+  return true
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -49,7 +59,7 @@ Deno.serve(async (request) => {
     return Response.json({ error: 'Somente administradores podem cadastrar catequistas.' }, { status: 403, headers: corsHeaders })
   }
 
-  let body: { full_name?: unknown; email?: unknown; phone?: unknown; class_id?: unknown; role?: unknown; send_invite?: unknown; initial_password?: unknown }
+  let body: { full_name?: unknown; email?: unknown; phone?: unknown; cpf?: unknown; class_id?: unknown; role?: unknown; send_invite?: unknown; initial_password?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -59,6 +69,7 @@ Deno.serve(async (request) => {
   const fullName = typeof body.full_name === 'string' ? body.full_name.trim() : ''
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   const phone = typeof body.phone === 'string' ? body.phone.replace(/\D/g, '') : ''
+  const cpf = typeof body.cpf === 'string' ? body.cpf.replace(/\D/g, '') : ''
   const classId = body.class_id === null || body.class_id === undefined || body.class_id === ''
     ? null
     : typeof body.class_id === 'string' &&
@@ -74,10 +85,11 @@ Deno.serve(async (request) => {
     !/^\d{10,11}$/.test(phone) ||
     (role !== 'administrador' && role !== 'catequista' && role !== 'catequizando') ||
     classId === undefined ||
+    (role === 'catequista' && !isValidCpf(cpf)) ||
     (role !== 'catequista' && classId !== null) ||
     (!sendInvite && (role !== 'catequista' || initialPassword.length < 8))
   ) {
-    return Response.json({ error: 'Informe nome, e-mail, telefone e perfil válidos.' }, { status: 400, headers: corsHeaders })
+    return Response.json({ error: 'Informe nome, e-mail, telefone, CPF (para catequistas) e perfil válidos.' }, { status: 400, headers: corsHeaders })
   }
 
   if (role === 'catequista' && classId) {
@@ -93,6 +105,21 @@ Deno.serve(async (request) => {
     }
     if (!classRecord) {
       return Response.json({ error: 'A turma selecionada não está ativa ou não existe.' }, { status: 400, headers: corsHeaders })
+    }
+  }
+
+  if (role === 'catequista') {
+    const { data: cpfOwner, error: cpfError } = await adminClient
+      .from('t_catequista')
+      .select('id')
+      .eq('cpf', cpf)
+      .maybeSingle()
+    if (cpfError) {
+      console.error('Falha ao verificar CPF do catequista:', cpfError.message)
+      return Response.json({ error: 'Não foi possível verificar o CPF informado.' }, { status: 500, headers: corsHeaders })
+    }
+    if (cpfOwner) {
+      return Response.json({ error: 'Já existe um catequista cadastrado com este CPF.' }, { status: 409, headers: corsHeaders })
     }
   }
 
@@ -128,7 +155,7 @@ Deno.serve(async (request) => {
   if (role === 'catequista') {
     const { error: catechistError } = await adminClient
       .from('t_catequista')
-      .upsert({ id: createdUser.id, full_name: fullName, phone, class_id: classId })
+      .upsert({ id: createdUser.id, full_name: fullName, phone, email, cpf, class_id: classId })
     if (catechistError) {
       console.error('Falha ao criar cadastro de catequista:', catechistError.message)
       return Response.json({ error: 'O usuário foi criado, mas não foi possível criar o cadastro de catequista. Procure a secretaria paroquial.' }, { status: 500, headers: corsHeaders })

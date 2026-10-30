@@ -20,13 +20,28 @@ export type AuthenticatedProfile = Profile & {
   full_name: string
   phone: string | null
   email: string
+  cpf: string | null
+  birth_date: string | null
+  address: ProfileAddress | null
   mustChangePassword: boolean
+}
+
+export type ProfileAddress = {
+  postal_code: string
+  street: string
+  street_number: string
+  complement: string | null
+  neighborhood: string
+  city: string
+  state: string
 }
 
 export type CatechistRecord = {
   id: string
   full_name: string
   phone: string | null
+  email: string | null
+  cpf: string | null
   class_id: string | null
 }
 
@@ -76,8 +91,8 @@ export type Database = {
       }
       t_catequista: {
         Row: CatechistRecord & { created_at: string }
-        Insert: { id: string; full_name: string; phone?: string | null; class_id?: string | null }
-        Update: Partial<Pick<CatechistRecord, 'full_name' | 'phone' | 'class_id'>>
+        Insert: { id: string; full_name: string; phone?: string | null; email?: string | null; cpf?: string | null; class_id?: string | null }
+        Update: Partial<Pick<CatechistRecord, 'full_name' | 'phone' | 'email' | 'cpf' | 'class_id'>>
         Relationships: []
       }
       classes: {
@@ -154,7 +169,7 @@ export type Database = {
         Returns: string
       }
       update_own_profile: {
-        Args: { p_full_name: string; p_phone: string }
+        Args: { p_full_name: string; p_phone: string; p_address?: Record<string, unknown> | null }
         Returns: undefined
       }
       is_initial_password_change_required: {
@@ -168,10 +183,6 @@ export type Database = {
       is_registration_upload_token_valid: {
         Args: { p_token: string }
         Returns: boolean
-      }
-      update_catequizando_registration: {
-        Args: { p_id: string; p_payload: Record<string, unknown> }
-        Returns: undefined
       }
       delete_class_schedule: {
         Args: { p_schedule_id: string }
