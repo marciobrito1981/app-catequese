@@ -1268,10 +1268,8 @@ function ProfilePage({
       data: { full_name: updatedName, phone: updatedPhone },
     })
     if (metadataError) {
-      setLoading(false)
-      onProfileUpdated({ ...profile, full_name: updatedName, phone: updatedPhone, address: updatedAddress })
-      setFeedback({ kind: 'error', text: 'Os dados foram atualizados no cadastro, mas não foi possível sincronizar o perfil da conta.' })
-      return
+      // Os metadados do Auth são apenas um fallback; o cadastro já foi atualizado.
+      console.warn('Falha ao sincronizar metadados do Auth:', metadataError.message)
     }
 
     let updatedEmail = profile.email
