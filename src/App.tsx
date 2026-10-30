@@ -1369,6 +1369,7 @@ function Dashboard({
   const [activeSection, setActiveSection] = useState<'applications' | 'schedules' | 'catechists' | 'profiles'>('applications')
   const [catechistName, setCatechistName] = useState('')
   const [catechistPhone, setCatechistPhone] = useState('')
+  const [catechistClassId, setCatechistClassId] = useState('')
   const [catechistEmail, setCatechistEmail] = useState('')
   const [catechistInitialPassword, setCatechistInitialPassword] = useState('')
   const [catechistConfirmPassword, setCatechistConfirmPassword] = useState('')
@@ -1377,6 +1378,7 @@ function Dashboard({
   const [inviteName, setInviteName] = useState('')
   const [invitePhone, setInvitePhone] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteClassId, setInviteClassId] = useState('')
   const [inviteRole, setInviteRole] = useState<UserRole>('catequizando')
   const [systemProfiles, setSystemProfiles] = useState<UserDirectoryProfile[]>([])
   const [profileInviteLoading, setProfileInviteLoading] = useState(false)
@@ -1389,6 +1391,9 @@ function Dashboard({
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [creatingAccountFor, setCreatingAccountFor] = useState<string | null>(null)
+  const [provisionalPassword, setProvisionalPassword] = useState('')
+  const [accountLoadingId, setAccountLoadingId] = useState<string | null>(null)
   const handleSignOut = async () => {
     if (!await onSignOut()) {
       setFeedback({ kind: 'error', text: 'Não foi possível encerrar a sessão. Tente novamente.' })
@@ -1400,15 +1405,35 @@ function Dashboard({
     if (!client) return
     let active = true
     const loadDashboard = async () => {
-      const { data, error } = await client
-        .from('t_catequizando')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const [
+        { data, error },
+        { data: classRows, error: classError },
+      ] = await Promise.all([
+        client.from('t_catequizando').select('*').order('created_at', { ascending: false }),
+        client.from('classes').select('id, name, active').order('name'),
+      ])
       if (!active) return
       if (error) {
         setFeedback({ kind: 'error', text: 'Não foi possível carregar as inscrições autorizadas.' })
         setLoading(false)
         return
+      }
+      if (classError) {
+        setFeedback({ kind: 'error', text: 'Não foi possível carregar as turmas.' })
+      } else if (classRows) {
+        setClasses(classRows)
+        setCatechistClassId((current) =>
+          current || classRows.find((classItem) => classItem.active)?.id || '',
+        )
+        setInviteClassId((current) =>
+          current || classRows.find((classItem) => classItem.active)?.id || '',
+        )
+        setNewSchedule((current) => ({
+          ...current,
+          classId: classRows.some((classItem) => classItem.id === current.classId && classItem.active)
+            ? current.classId
+            : classRows.find((classItem) => classItem.active)?.id ?? '',
+        }))
       }
 
       const rows = (data ?? []) as RegistrationRow[]
@@ -1418,17 +1443,15 @@ function Dashboard({
           { data: catechistRows, error: catechistError },
           { data: profileRows, error: profilesError },
           { data: catequizandoRows, error: catequizandoError },
-          { data: classRows, error: classError },
           { data: scheduleRows, error: scheduleError },
         ] = await Promise.all([
-          client.from('t_catequista').select('id, full_name, phone').order('full_name'),
+          client.from('t_catequista').select('id, full_name, phone, class_id').order('full_name'),
           client.from('profiles').select('id, role').order('role'),
           client.from('t_catequizando').select('user_id, full_name').order('created_at', { ascending: false }),
-          client.from('classes').select('id, name, active').order('name'),
           client.from('class_schedules').select('id, class_id, weekday, starts_at, ends_at, active, available, classes(name)').order('weekday'),
         ])
         if (!active) return
-        if (catechistError || profilesError || catequizandoError || classError || scheduleError) {
+        if (catechistError || profilesError || catequizandoError || scheduleError) {
           setFeedback({ kind: 'error', text: 'Não foi possível carregar todos os dados de administração.' })
         }
         if (catechistRows) setCatechists(catechistRows)
@@ -1448,15 +1471,6 @@ function Dashboard({
                 ? catequizandoNames.get(item.id) ?? roles[item.role]
                 : item.id === profile.id ? profile.full_name : roles[item.role],
           })))
-        }
-        if (classRows) {
-          setClasses(classRows)
-          setNewSchedule((current) => ({
-            ...current,
-            classId: classRows.some((classItem) => classItem.id === current.classId && classItem.active)
-              ? current.classId
-              : classRows.find((classItem) => classItem.active)?.id ?? '',
-          }))
         }
         if (scheduleRows) setAdminSchedules(scheduleRows as AdminSchedule[])
       }
@@ -1506,22 +1520,66 @@ function Dashboard({
     window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
-  const assignCatechist = async (applicationId: string, catechistId: string) => {
+  const assignClass = async (applicationId: string, classId: string) => {
     if (!supabase) return
     setFeedback(null)
     const { error } = await supabase
       .from('t_catequizando')
-      .update({ assigned_catechist_id: catechistId || null })
+      .update({ assigned_class_id: classId || null })
       .eq('id', applicationId)
     if (error) {
-      setFeedback({ kind: 'error', text: 'Não foi possível atualizar o catequista responsável.' })
+      setFeedback({ kind: 'error', text: 'Não foi possível atualizar a turma do catequizando.' })
       return
     }
     setApplications((current) => current.map((application) =>
       application.id === applicationId
-        ? { ...application, assigned_catechist_id: catechistId || null }
+        ? { ...application, assigned_class_id: classId || null }
         : application,
     ))
+  }
+
+  const createCatequizandoAccount = async (application: RegistrationRow) => {
+    if (!supabase || profile.role !== 'administrador') return
+    if (provisionalPassword.length < 8) {
+      setFeedback({ kind: 'error', text: 'A senha provisória deve ter pelo menos 8 caracteres.' })
+      return
+    }
+
+    setAccountLoadingId(application.id)
+    setFeedback(null)
+    const { data, error } = await supabase.functions.invoke<{ user_id: string }>(
+      'create-catequizando-account',
+      {
+        body: {
+          registration_id: application.id,
+          provisional_password: provisionalPassword,
+        },
+      },
+    )
+    setAccountLoadingId(null)
+    if (error || !data?.user_id) {
+      let message = 'Não foi possível criar o usuário. Confira se o e-mail já possui uma conta e tente novamente.'
+      const context = (error as { context?: Response } | null)?.context
+      if (context && typeof context.json === 'function') {
+        const body = await context.json().catch(() => null) as { error?: string } | null
+        if (body?.error) message = body.error
+      }
+      setFeedback({
+        kind: 'error',
+        text: message,
+      })
+      return
+    }
+
+    setApplications((current) => current.map((item) =>
+      item.id === application.id ? { ...item, user_id: data.user_id } : item,
+    ))
+    setCreatingAccountFor(null)
+    setProvisionalPassword('')
+    setFeedback({
+      kind: 'success',
+      text: `Usuário criado para ${application.email}. No primeiro acesso, o catequizando deverá trocar a senha provisória.`,
+    })
   }
 
   const deleteCatequizando = async (registration: RegistrationRow) => {
@@ -1728,7 +1786,11 @@ function Dashboard({
       setFeedback(null)
       const { error } = await supabase
         .from('t_catequista')
-        .update({ full_name: catechistName.trim(), phone: digits(catechistPhone) })
+        .update({
+          full_name: catechistName.trim(),
+          phone: digits(catechistPhone),
+          class_id: catechistClassId || null,
+        })
         .eq('id', editingCatechistId)
       setCatechistLoading(false)
       if (error) {
@@ -1736,7 +1798,12 @@ function Dashboard({
         return
       }
       setCatechists((current) => current.map((item) => item.id === editingCatechistId
-        ? { ...item, full_name: catechistName.trim(), phone: digits(catechistPhone) }
+        ? {
+          ...item,
+          full_name: catechistName.trim(),
+          phone: digits(catechistPhone),
+          class_id: catechistClassId || null,
+        }
         : item,
       ).sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')))
       setSystemProfiles((current) => current.map((item) => item.id === editingCatechistId
@@ -1746,6 +1813,7 @@ function Dashboard({
       setEditingCatechistId(null)
       setCatechistName('')
       setCatechistPhone('')
+      setCatechistClassId('')
       setFeedback({ kind: 'success', text: 'Cadastro do catequista atualizado.' })
       return
     }
@@ -1764,6 +1832,7 @@ function Dashboard({
         full_name: catechistName.trim(),
         email: catechistEmail.trim(),
         phone: digits(catechistPhone),
+        class_id: catechistClassId || null,
         role: 'catequista',
         send_invite: false,
         initial_password: catechistInitialPassword,
@@ -1784,6 +1853,7 @@ function Dashboard({
       id: data.id,
       full_name: catechistName.trim(),
       phone: digits(catechistPhone),
+      class_id: catechistClassId || null,
     }
     setCatechists((current) =>
       [...current, newCatechist].sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')),
@@ -1794,6 +1864,7 @@ function Dashboard({
     )
     setCatechistName('')
     setCatechistPhone('')
+    setCatechistClassId('')
     setCatechistEmail('')
     setCatechistInitialPassword('')
     setCatechistConfirmPassword('')
@@ -1819,6 +1890,7 @@ function Dashboard({
       setEditingCatechistId(null)
       setCatechistName('')
       setCatechistPhone('')
+      setCatechistClassId('')
     }
     setFeedback({ kind: 'success', text: 'Catequista e conta de acesso excluídos.' })
   }
@@ -1833,6 +1905,7 @@ function Dashboard({
         full_name: inviteName.trim(),
         email: inviteEmail.trim(),
         phone: digits(invitePhone),
+        class_id: inviteRole === 'catequista' ? inviteClassId || null : null,
         role: inviteRole,
       },
     })
@@ -1855,6 +1928,7 @@ function Dashboard({
           id: newProfile.id,
           full_name: newProfile.full_name,
           phone: digits(invitePhone),
+          class_id: inviteClassId || null,
         }].sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')),
       )
     }
@@ -2002,10 +2076,18 @@ function Dashboard({
               <div className="management-grid catechist-management-grid">
                 <form className="management-card" onSubmit={(event) => void registerCatechist(event)}>
                   <h3>{editingCatechistId ? 'Editar catequista' : 'Novo catequista'}</h3>
-                  <p>{editingCatechistId ? 'Atualize o nome e o telefone do catequista.' : 'O acesso será criado como catequista; privilégios administrativos não são concedidos pelo formulário.'}</p>
+                  <p>{editingCatechistId ? 'Atualize o nome, o telefone e a turma do catequista.' : 'Associe o catequista a uma turma; vários catequistas podem acompanhar a mesma turma.'}</p>
                   <div className="management-fields">
                     <label className="span-all">Nome<input autoComplete="name" value={catechistName} onChange={(event) => setCatechistName(event.target.value)} required maxLength={150} /></label>
                     <label>Telefone<input type="tel" inputMode="tel" autoComplete="tel-national" value={catechistPhone} onChange={(event) => setCatechistPhone(maskPhone(event.target.value))} placeholder="(11) 99999-9999" required maxLength={16} /></label>
+                    <label className="span-all">Turma
+                      <select value={catechistClassId} onChange={(event) => setCatechistClassId(event.target.value)}>
+                        <option value="">Sem turma associada</option>
+                        {classes.filter((classItem) =>
+                          classItem.active || classItem.id === catechistClassId,
+                        ).map((classItem) => <option key={classItem.id} value={classItem.id}>{classItem.name}</option>)}
+                      </select>
+                    </label>
                     {!editingCatechistId && <>
                       <label>E-mail<input type="email" autoComplete="email" value={catechistEmail} onChange={(event) => setCatechistEmail(event.target.value)} required maxLength={254} /></label>
                       <label>Senha do primeiro acesso<input type="password" autoComplete="new-password" value={catechistInitialPassword} onChange={(event) => setCatechistInitialPassword(event.target.value)} required minLength={8} /></label>
@@ -2016,7 +2098,7 @@ function Dashboard({
                   <button className="button button-primary" type="submit" disabled={catechistLoading}>
                     {catechistLoading ? <><LoaderCircle className="spin" size={16} /> Salvando...</> : <>{editingCatechistId ? 'Salvar alterações' : 'Cadastrar'} <ArrowRight size={15} /></>}
                   </button>
-                  {editingCatechistId && <button className="button button-outline" type="button" onClick={() => { setEditingCatechistId(null); setCatechistName(''); setCatechistPhone('') }}>Cancelar edição</button>}
+                  {editingCatechistId && <button className="button button-outline" type="button" onClick={() => { setEditingCatechistId(null); setCatechistName(''); setCatechistPhone(''); setCatechistClassId('') }}>Cancelar edição</button>}
                 </form>
                 <div className="management-card catechist-directory">
                   <h3>Catequistas cadastrados</h3>
@@ -2030,6 +2112,7 @@ function Dashboard({
                           setEditingCatechistId(catechist.id)
                           setCatechistName(catechist.full_name)
                           setCatechistPhone(maskPhone(catechist.phone ?? ''))
+                          setCatechistClassId(catechist.class_id ?? '')
                         }} aria-label={`Editar catequista ${catechist.full_name}`} title="Editar catequista"><Pencil size={14} /></button>
                         <button type="button" disabled={deletingCatechistId === catechist.id} onClick={() => void deleteCatechist(catechist)} aria-label={`Excluir catequista ${catechist.full_name}`} title="Excluir catequista">
                           {deletingCatechistId === catechist.id ? <LoaderCircle className="spin" size={14} /> : <Trash2 size={14} />}
@@ -2062,6 +2145,16 @@ function Dashboard({
                         <option value="administrador">Administrador</option>
                       </select>
                     </label>
+                    {inviteRole === 'catequista' && (
+                      <label className="span-all">Turma
+                        <select value={inviteClassId} onChange={(event) => setInviteClassId(event.target.value)}>
+                          <option value="">Sem turma associada</option>
+                          {classes.filter((classItem) => classItem.active).map((classItem) =>
+                            <option key={classItem.id} value={classItem.id}>{classItem.name}</option>,
+                          )}
+                        </select>
+                      </label>
+                    )}
                   </div>
                   {inviteRole === 'administrador' && (
                     <p className="role-warning">Administradores têm acesso amplo aos dados. Conceda esse perfil somente a pessoas autorizadas.</p>
@@ -2105,8 +2198,19 @@ function Dashboard({
                   <div className="application-list">
                     {filteredApplications.map((application) => (
                       <article className="application-row" key={application.id}>
-                        <span className="application-avatar">{application.full_name.slice(0, 1).toUpperCase()}</span>
-                        <span className="application-info"><strong>{application.full_name}</strong><small>{application.email} · {application.phone}</small></span>
+                        <div className="application-person">
+                          <span className="application-avatar">{application.full_name.slice(0, 1).toUpperCase()}</span>
+                          <div className="application-info">
+                            <strong className="application-name">{application.full_name || 'Nome não informado'}</strong>
+                            <div className="application-contact-details">
+                              <div><small>Telefone</small><strong>{application.phone || 'Não informado'}</strong></div>
+                              <div><small>E-mail</small><strong>{application.email || 'Não informado'}</strong></div>
+                              <div><small>Turma</small><strong>
+                              {classes.find((classItem) => classItem.id === application.assigned_class_id)?.name ?? 'Sem turma'}
+                              </strong></div>
+                            </div>
+                          </div>
+                        </div>
                         <span className="application-date">{formatDateTime(application.created_at)}</span>
                         {preferences[application.id]?.length ? (
                           <span className="application-preferences">
@@ -2117,14 +2221,16 @@ function Dashboard({
                         ) : <span className="application-preferences">Sem preferência de horário</span>}
                         {profile.role === 'administrador' && (
                           <label className="assignment-field">
-                            <span>Catequista responsável</span>
+                            <span>Turma do catequizando</span>
                             <select
-                              value={application.assigned_catechist_id ?? ''}
-                              onChange={(event) => void assignCatechist(application.id, event.target.value)}
+                              value={application.assigned_class_id ?? ''}
+                              onChange={(event) => void assignClass(application.id, event.target.value)}
                             >
-                              <option value="">Não atribuído</option>
-                              {catechists.map((catechist) => (
-                                <option key={catechist.id} value={catechist.id}>{catechist.full_name}</option>
+                              <option value="">Sem turma</option>
+                              {classes.filter((classItem) =>
+                                classItem.active || classItem.id === application.assigned_class_id,
+                              ).map((classItem) => (
+                                <option key={classItem.id} value={classItem.id}>{classItem.name}</option>
                               ))}
                             </select>
                           </label>
@@ -2137,6 +2243,63 @@ function Dashboard({
                         ) : <span className="no-document">Sem anexo</span>}
                         {profile.role === 'administrador' && (
                           <div className="row-actions registration-actions">
+                            {application.user_id ? (
+                              <span className="system-user-status">Usuário do sistema criado</span>
+                            ) : creatingAccountFor === application.id ? (
+                              <form
+                                className="create-account-form"
+                                onSubmit={(event) => {
+                                  event.preventDefault()
+                                  void createCatequizandoAccount(application)
+                                }}
+                              >
+                                <label>
+                                  Senha provisória para {application.email || 'e-mail não informado'}
+                                  <input
+                                    type="password"
+                                    autoComplete="new-password"
+                                    value={provisionalPassword}
+                                    onChange={(event) => setProvisionalPassword(event.target.value)}
+                                    minLength={8}
+                                    required
+                                    placeholder="Mínimo de 8 caracteres"
+                                  />
+                                </label>
+                                <button
+                                  className="button button-primary"
+                                  type="submit"
+                                  disabled={accountLoadingId === application.id || !application.email}
+                                >
+                                  {accountLoadingId === application.id
+                                    ? <><LoaderCircle className="spin" size={14} /> Criando...</>
+                                    : 'Confirmar criação'}
+                                </button>
+                                <button
+                                  className="button button-outline"
+                                  type="button"
+                                  onClick={() => {
+                                    setCreatingAccountFor(null)
+                                    setProvisionalPassword('')
+                                  }}
+                                  disabled={accountLoadingId === application.id}
+                                >
+                                  Cancelar
+                                </button>
+                              </form>
+                            ) : (
+                              <button
+                                className="button button-outline create-account-button"
+                                type="button"
+                                onClick={() => {
+                                  setCreatingAccountFor(application.id)
+                                  setProvisionalPassword('')
+                                }}
+                                disabled={!application.email}
+                                title={!application.email ? 'A inscrição não possui e-mail' : undefined}
+                              >
+                                Criar usuário sistema
+                              </button>
+                            )}
                             <button type="button" onClick={() => onEditRegistration(application)} aria-label={`Editar cadastro de ${application.full_name}`} title="Editar catequizando"><Pencil size={15} /></button>
                             <button type="button" onClick={() => void deleteCatequizando(application)} aria-label={`Excluir cadastro de ${application.full_name}`} title="Excluir catequizando"><Trash2 size={15} /></button>
                           </div>

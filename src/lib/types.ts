@@ -27,6 +27,7 @@ export type CatechistRecord = {
   id: string
   full_name: string
   phone: string | null
+  class_id: string | null
 }
 
 export type RegistrationRow = {
@@ -59,6 +60,7 @@ export type RegistrationRow = {
   privacy_acknowledged_at: string
   marriage_certificate_path: string | null
   assigned_catechist_id: string | null
+  assigned_class_id: string | null
   user_id: string | null
   created_at: string
 }
@@ -74,8 +76,8 @@ export type Database = {
       }
       t_catequista: {
         Row: CatechistRecord & { created_at: string }
-        Insert: { id: string; full_name: string; phone?: string | null }
-        Update: Partial<Pick<CatechistRecord, 'full_name' | 'phone'>>
+        Insert: { id: string; full_name: string; phone?: string | null; class_id?: string | null }
+        Update: Partial<Pick<CatechistRecord, 'full_name' | 'phone' | 'class_id'>>
         Relationships: []
       }
       classes: {
