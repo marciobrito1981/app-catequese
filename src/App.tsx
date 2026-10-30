@@ -1407,13 +1407,13 @@ function ProfilePage({
           <div className="profile-actions">
             {editing ? (
               <>
-                <button type="submit" className="button button-primary" disabled={loading}>
+                <button key="save" type="submit" className="button button-primary" disabled={loading}>
                   {loading ? <><LoaderCircle className="spin" size={17} /> Salvando...</> : <>Salvar alterações <Check size={16} /></>}
                 </button>
-                <button type="button" className="button button-outline" onClick={cancelEditing} disabled={loading}>Cancelar</button>
+                <button key="cancel" type="button" className="button button-outline" onClick={cancelEditing} disabled={loading}>Cancelar</button>
               </>
             ) : (
-              <button type="button" className="button button-primary" onClick={() => { setFeedback(null); setEditing(true) }}>
+              <button key="edit" type="button" className="button button-primary" onClick={(event) => { event.preventDefault(); setFeedback(null); setEditing(true) }}>
                 Editar perfil <Pencil size={16} />
               </button>
             )}
