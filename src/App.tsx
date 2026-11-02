@@ -1148,7 +1148,7 @@ function FirstAccessPasswordPage({
       <footer className="form-footer">PARÓQUIA SÃO JOSÉ <span>·</span> CATEQUESE DE ADULTOS</footer>
     </main>
   )
-} 
+}
 
 function ProfilePage({
   profile,
