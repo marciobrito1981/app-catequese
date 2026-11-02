@@ -1147,7 +1147,7 @@ function FirstAccessPasswordPage({
       </div>
       <footer className="form-footer">PARÓQUIA SÃO JOSÉ <span>·</span> CATEQUESE DE ADULTOS</footer>
     </main>
-  )
+  ) 
 }
 
 function ProfilePage({
@@ -1176,7 +1176,7 @@ function ProfilePage({
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-
+ 
   const resetForm = () => {
     setFullName(profile.full_name)
     setPhone(profile.phone ?? '')
