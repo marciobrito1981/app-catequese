@@ -983,9 +983,6 @@ function RegistrationPage({
             <div className="conditional-fields">
               <div className="conditional-caption"><span /> Dados do batismo <small>Preencha o que souber</small></div>
               <div className="form-grid">
-                <Field label="Data do batismo">
-                  <input inputMode="numeric" placeholder="DD/MM/AAAA" value={values.baptismDate} onChange={(event) => update('baptismDate', maskDate(event.target.value))} maxLength={10} />
-                </Field>
                 <Field label="Paróquia ou igreja">
                   <input value={values.baptismParish} onChange={(event) => update('baptismParish', event.target.value)} maxLength={150} />
                 </Field>
@@ -1007,6 +1004,9 @@ function RegistrationPage({
                 </Field>
                 <Field label="Cidade">
                   <input value={values.eucharistCity} onChange={(event) => update('eucharistCity', event.target.value)} maxLength={100} />
+                </Field>
+                <Field label="Estado (UF)">
+                  <input value={values.eucharistState} onChange={(event) => update('eucharistState', event.target.value.toUpperCase().slice(0, 2))} maxLength={2} />
                 </Field>
               </div>
             </div>
