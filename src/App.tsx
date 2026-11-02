@@ -83,6 +83,7 @@ const initialForm = {
   baptismState: '',
   eucharistParish: '',
   eucharistCity: '',
+  eucharistState: '',
   scheduleIds: [] as string[],
   privacyAcknowledged: false,
 }
@@ -626,6 +627,7 @@ function RegistrationPage({
         sacraments: next,
         eucharistParish: '',
         eucharistCity: '',
+        eucharistState: '',
       }))
     }
   }
@@ -753,6 +755,7 @@ function RegistrationPage({
       baptism_state: values.baptismState.toUpperCase(),
       eucharist_parish: values.eucharistParish,
       eucharist_city: values.eucharistCity,
+      eucharist_state: values.eucharistState.toUpperCase(),
       schedule_ids: values.scheduleIds,
       privacy_acknowledged: values.privacyAcknowledged,
       marriage_certificate_path: certificatePath,
