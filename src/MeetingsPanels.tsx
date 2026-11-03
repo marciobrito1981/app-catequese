@@ -323,7 +323,7 @@ export function TransferClassControl({ registration, classes, onFeedback, onTran
   }
 
   if (!open) {
-    return <button type="button" className="button button-outline" onClick={() => setOpen(true)}>Transferir turma</button>
+    return <button type="button" className="button button-outline view-registration-button" onClick={() => setOpen(true)}>Transferir turma</button>
   }
   return (
     <div className="transfer-control">
@@ -343,10 +343,10 @@ export function TransferClassControl({ registration, classes, onFeedback, onTran
           {meetings.map((meeting) => <option key={meeting.id} value={meeting.id}>{meeting.meeting_number}. {meeting.theme}</option>)}
         </select>
       )}
-      <button type="button" className="button button-primary" disabled={saving || !classId || (scope === 'meeting' && !meetingId)} onClick={() => void submit()}>
+      <button type="button" className="button button-outline view-registration-button" disabled={saving || !classId || (scope === 'meeting' && !meetingId)} onClick={() => void submit()}>
         {saving ? <LoaderCircle className="spin" size={15} /> : 'Confirmar'}
       </button>
-      <button type="button" className="button button-outline" onClick={() => setOpen(false)}>Cancelar</button>
+      <button type="button" className="button button-outline view-registration-button" onClick={() => setOpen(false)}>Cancelar</button>
     </div>
   )
 }

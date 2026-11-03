@@ -2661,7 +2661,7 @@ function Dashboard({
                             Comprovante
                           </button>
                         ) : <span className="no-document">Sem anexo</span>}
-                        <button type="button" className="button button-outline view-registration-button" onClick={() => setViewingRegistration(application)}>
+                        <button type="button" className="button button-primary view-registration-button" onClick={() => setViewingRegistration(application)}>
                           <Eye size={15} /> Visualizar cadastro
                         </button>
                         {profile.role === 'coordenador' && (
@@ -2735,7 +2735,7 @@ function Dashboard({
                           <div className="catequizando-actions">
                             <button
                               type="button"
-                              className="button button-outline"
+                              className="button button-outline view-registration-button"
                               disabled={managingCatequizandoId === application.id}
                               onClick={() => void manageCatequizando(application, application.active === false ? 'activate' : 'deactivate')}
                             >
@@ -2743,12 +2743,14 @@ function Dashboard({
                             </button>
                             <button
                               type="button"
+                              className="button button-outline view-registration-button"
                               disabled={managingCatequizandoId === application.id}
                               onClick={() => void manageCatequizando(application, 'delete')}
                               aria-label={`Excluir catequizando ${application.full_name}`}
                               title="Excluir catequizando"
                             >
                               {managingCatequizandoId === application.id ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />}
+                              Excluir
                             </button>
                           </div>
                         )}

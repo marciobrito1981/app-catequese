@@ -284,12 +284,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
 .application-date { color: #89949c; font-size: 9px; white-space: nowrap; }
 .application-preferences { grid-column: 1 / -1; margin-left: 46px; color: #72808b; font-size: 9px; line-height: 1.5; }
 .assignment-field { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin-left: 46px; color: #7d8992; font-size: 9px; }
-.assignment-field select { max-width: 220px; min-height: 30px; border: 1px solid #e5e8e9; border-radius: 4px; padding: 0 8px; color: #415466; background: #fff; font: inherit; }
+.assignment-field select, .transfer-control select { min-height: 30px; border: 1px solid #e5e8e9; border-radius: 4px; padding: 0 8px; color: #415466; background: #fff; font-size: 9px; }
+.assignment-field select { max-width: 220px; }
 .document-button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e6e1d5; border-radius: 4px; padding: 7px 9px; color: #887146; background: #fff; font-size: 9px; }
 .document-button:hover { border-color: #c7b486; background: #fbfaf6; }
 .document-button:disabled { opacity: .55; cursor: wait; }
 .no-document { color: #a0a8ae; font-size: 9px; white-space: nowrap; }
-.registration-actions .create-account-button { min-height: 32px; padding: 0 10px; font-size: 9px; }
+.registration-actions .create-account-button, .view-registration-button { min-height: 32px; padding: 0 10px; font-size: 9px; }
 .registration-actions { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-start; margin-left: 46px; }
 .create-account-form { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; width: 100%; }
 .create-account-form label { min-width: min(100%, 260px); flex: 1; display: flex; flex-direction: column; gap: 5px; color: #64737f; font-size: 9px; }
@@ -333,7 +334,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
 .catequizando-actions { display: flex; gap: 8px; align-items: center; }
 .transfer-control { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 100%; }
 .transfer-control select { max-width: 160px; min-width: 0; }
-.transfer-control .button { padding: 6px 10px; font-size: 12px; }
 .attendance-summary { display: grid; gap: 6px; margin-top: 12px; }
 .attendance-summary h4 { margin: 8px 0 2px; font-size: 14px; }
 .attendance-summary ul { margin: 0; padding-left: 18px; }
@@ -447,7 +447,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
 
 .profile-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: block; }
 .profile-fieldset input:disabled, .profile-fieldset select:disabled { background: #f4f6f7; color: #4b5963; cursor: default; }
-.view-registration-button { min-height: 34px; font-size: 12px; white-space: nowrap; }
+.view-registration-button { white-space: nowrap; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(20, 30, 38, .55); }
 .registration-modal { width: min(760px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; border-radius: 8px; background: #fff; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
 .registration-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px; border-bottom: 1px solid #edf0f2; }
