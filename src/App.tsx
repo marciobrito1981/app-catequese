@@ -855,8 +855,6 @@ function RegistrationPage({
                 <option value="">Selecione, se desejar</option>
                 <option value="feminino">Feminino</option>
                 <option value="masculino">Masculino</option>
-                <option value="outro">Outro</option>
-                <option value="prefiro_nao_informar">Prefiro não informar</option>
               </select>
             </Field>
             <Field label="Estado civil" required>
