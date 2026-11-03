@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Bell, LoaderCircle } from 'lucide-react'
+import { Bell, LoaderCircle, X } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import type { AppNotification, AttendanceRecord, AuthenticatedProfile, Meeting, RegistrationRow } from './lib/types'
 
@@ -161,6 +161,7 @@ export function AttendancePanel({ registrations, role, onFeedback }: {
   const [meetingId, setMeetingId] = useState('')
   const [marks, setMarks] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
+  const [attendanceSummaryOpen, setAttendanceSummaryOpen] = useState(false)
 
   const students = useMemo(() => {
     const confirmed = registrations.filter((item) => item.user_id && item.active && item.assigned_class_id)
@@ -191,6 +192,15 @@ export function AttendancePanel({ registrations, role, onFeedback }: {
   useEffect(() => { void load() }, [load])
 
   useEffect(() => {
+    if (!attendanceSummaryOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAttendanceSummaryOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [attendanceSummaryOpen])
+
+  useEffect(() => {
     const next: Record<string, boolean> = {}
     for (const student of students) {
       const record = allAttendance.find((item) => item.meeting_id === meetingId && item.catequizando_id === student.id)
@@ -201,6 +211,13 @@ export function AttendancePanel({ registrations, role, onFeedback }: {
 
   const absences = (studentId: string) =>
     allAttendance.filter((item) => item.catequizando_id === studentId && !item.present).length
+  const meetingAttendance = allAttendance.filter((item) => item.meeting_id === meetingId)
+  const attendanceGroups = [
+    ['Presentes', students.filter((student) => meetingAttendance.find((item) => item.catequizando_id === student.id)?.present === true)],
+    ['Ausentes', students.filter((student) => meetingAttendance.find((item) => item.catequizando_id === student.id)?.present === false)],
+    ['Sem registro', students.filter((student) => !meetingAttendance.some((item) => item.catequizando_id === student.id))],
+  ] as const
+  const selectedMeeting = meetings.find((meeting) => meeting.id === meetingId)
 
   const save = async () => {
     if (!supabase || !meetingId || students.length === 0) return
@@ -257,26 +274,50 @@ export function AttendancePanel({ registrations, role, onFeedback }: {
               </div>
             ))}
         {meetingId && students.length > 0 && (
-          <div className="attendance-summary">
-            <strong>Quem veio neste encontro</strong>
-            {([
-              ['Presentes', students.filter((s) => allAttendance.find((a) => a.meeting_id === meetingId && a.catequizando_id === s.id)?.present === true)],
-              ['Ausentes', students.filter((s) => allAttendance.find((a) => a.meeting_id === meetingId && a.catequizando_id === s.id)?.present === false)],
-              ['Sem registro', students.filter((s) => !allAttendance.some((a) => a.meeting_id === meetingId && a.catequizando_id === s.id))],
-            ] as const).map(([label, list]) => (
-              <div key={label}>
-                <h4>{label} ({list.length})</h4>
-                {list.length > 0 && <ul>{list.map((s) => <li key={s.id}>{s.full_name}</li>)}</ul>}
-              </div>
-            ))}
+          <div className="attendance-actions">
+            <button className="button button-primary view-registration-button" type="button" onClick={() => setAttendanceSummaryOpen(true)}>
+              Ver presenças e ausências
+            </button>
+            <button className="button button-primary view-registration-button" type="button" onClick={() => void save()} disabled={saving}>
+              {saving ? <><LoaderCircle className="spin" size={15} /> Salvando...</> : 'Salvar chamada'}
+            </button>
           </div>
         )}
-        {meetingId && students.length > 0 && (
-          <button className="button button-primary" type="button" onClick={() => void save()} disabled={saving}>
-            {saving ? <><LoaderCircle className="spin" size={15} /> Salvando...</> : 'Salvar chamada'}
-          </button>
-        )}
       </div>
+      {attendanceSummaryOpen && (
+        <div className="modal-backdrop" onClick={() => setAttendanceSummaryOpen(false)}>
+          <div
+            className="registration-modal attendance-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="attendance-summary-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="registration-modal-header">
+              <div>
+                <span className="eyebrow">
+                  {selectedMeeting ? `${selectedMeeting.meeting_number}. ${selectedMeeting.theme}` : 'CHAMADA'}
+                </span>
+                <h2 id="attendance-summary-title">Presenças e ausências</h2>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setAttendanceSummaryOpen(false)} aria-label="Fechar">
+                <X size={18} />
+              </button>
+            </header>
+            <div className="registration-modal-body attendance-summary">
+              {attendanceGroups.map(([label, list]) => (
+                <section key={label}>
+                  <h3>{label} ({list.length})</h3>
+                  {list.length > 0 && <ul>{list.map((student) => <li key={student.id}>{student.full_name}</li>)}</ul>}
+                </section>
+              ))}
+            </div>
+            <footer className="registration-modal-footer">
+              <button type="button" className="button button-primary" onClick={() => setAttendanceSummaryOpen(false)}>Fechar</button>
+            </footer>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
