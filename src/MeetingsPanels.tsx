@@ -257,6 +257,21 @@ export function AttendancePanel({ registrations, role, onFeedback }: {
               </div>
             ))}
         {meetingId && students.length > 0 && (
+          <div className="attendance-summary">
+            <strong>Quem veio neste encontro</strong>
+            {([
+              ['Presentes', students.filter((s) => allAttendance.find((a) => a.meeting_id === meetingId && a.catequizando_id === s.id)?.present === true)],
+              ['Ausentes', students.filter((s) => allAttendance.find((a) => a.meeting_id === meetingId && a.catequizando_id === s.id)?.present === false)],
+              ['Sem registro', students.filter((s) => !allAttendance.some((a) => a.meeting_id === meetingId && a.catequizando_id === s.id))],
+            ] as const).map(([label, list]) => (
+              <div key={label}>
+                <h4>{label} ({list.length})</h4>
+                {list.length > 0 && <ul>{list.map((s) => <li key={s.id}>{s.full_name}</li>)}</ul>}
+              </div>
+            ))}
+          </div>
+        )}
+        {meetingId && students.length > 0 && (
           <button className="button button-primary" type="button" onClick={() => void save()} disabled={saving}>
             {saving ? <><LoaderCircle className="spin" size={15} /> Salvando...</> : 'Salvar chamada'}
           </button>
@@ -299,7 +314,7 @@ export function TransferClassControl({ registration, classes, onFeedback, onTran
     }
     onFeedback({
       kind: 'success',
-      text: scope === 'permanent' ? 'Catequizando transferido de turma.' : 'Transferência temporária registrada para o encontro selecionado.',
+      text: scope === 'permanent' ? 'Turma alterada.' : 'Transferência temporária registrada.',
     })
     setOpen(false)
     setClassId('')
@@ -318,11 +333,13 @@ export function TransferClassControl({ registration, classes, onFeedback, onTran
           <option key={item.id} value={item.id}>{item.name}</option>
         ))}
       </select>
-      <label><input type="radio" checked={scope === 'permanent'} onChange={() => setScope('permanent')} /> Permanente</label>
-      <label><input type="radio" checked={scope === 'meeting'} onChange={() => setScope('meeting')} /> Somente um encontro</label>
+      <select aria-label="Tipo de transferência" value={scope} onChange={(event) => setScope(event.target.value as 'permanent' | 'meeting')}>
+        <option value="permanent">Permanente</option>
+        <option value="meeting">Temporária</option>
+      </select>
       {scope === 'meeting' && (
         <select aria-label="Encontro da transferência" value={meetingId} onChange={(event) => setMeetingId(event.target.value)}>
-          <option value="">Selecione o encontro</option>
+          <option value="">Encontro</option>
           {meetings.map((meeting) => <option key={meeting.id} value={meeting.id}>{meeting.meeting_number}. {meeting.theme}</option>)}
         </select>
       )}
