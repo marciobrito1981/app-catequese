@@ -270,6 +270,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
 .dashboard-empty > span { max-width: 300px; text-align: center; line-height: 1.6; }
 .application-row { min-height: 72px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 12px; border-bottom: 1px solid #f0f2f3; padding: 14px 18px; }
 .application-row:last-child { border-bottom: 0; }
+.underage-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #fff1e0; color: #b45309; border: 1px solid #f5c58a; font-size: 0.72rem; font-weight: 700; vertical-align: middle; }
 .application-person { min-width: 0; display: flex; align-items: center; gap: 12px; }
 .application-avatar { width: 34px; height: 34px; font-size: 12px; }
 .application-info { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }

@@ -57,6 +57,8 @@ import type {
 type Screen = 'login' | 'registration' | 'dashboard' | 'catequizando-registration' | 'profile'
 type Feedback = { kind: 'success' | 'error' | 'info'; text: string }
 
+const underageMessage = 'Para se inscrever na catequese de adultos você precisa ter 18 anos ou mais, sua inscrição, será analisada com carinho!'
+
 const initialForm = {
   fullName: '',
   birthDate: '',
@@ -712,6 +714,9 @@ function RegistrationPage({
       setFeedback({ kind: 'error', text: 'Informe uma data de nascimento válida.' })
       return
     }
+    if (Number(age) < 18) {
+      window.alert(underageMessage)
+    }
     const baptismDate = values.baptismDate ? parseBrazilianDate(values.baptismDate) : null
     if (values.baptismDate && !baptismDate) {
       setFeedback({ kind: 'error', text: 'Confira a data de batismo informada.' })
@@ -842,7 +847,7 @@ function RegistrationPage({
               <input autoComplete="name" value={values.fullName} onChange={(event) => update('fullName', event.target.value)} placeholder="Como podemos chamar você?" required maxLength={150} />
             </Field>
             <Field label="Data de nascimento" required>
-              <input inputMode="numeric" placeholder="DD/MM/AAAA" value={values.birthDate} onChange={(event) => update('birthDate', maskDate(event.target.value))} required maxLength={10} />
+              <input inputMode="numeric" placeholder="DD/MM/AAAA" value={values.birthDate}               onChange={(event) => update('birthDate', maskDate(event.target.value))} required maxLength={10} />
             </Field>
             <Field label="Idade atual" hint="Calculada automaticamente">
               <input value={age ? `${age} anos` : ''} readOnly placeholder="Preencha sua data de nascimento" className="readonly-input" aria-label="Idade atual calculada automaticamente" />
@@ -1487,11 +1492,18 @@ function RegistrationSummary({
   registration: RegistrationRow
   classLabel: string | undefined
 }) {
+  const age = registration.birth_date
+    ? Number(calculateAge(registration.birth_date.slice(0, 10).split('-').reverse().join('/')))
+    : null
+  const underage = age !== null && !Number.isNaN(age) && age < 18
   return (
     <div className="application-person">
       <span className="application-avatar">{registration.full_name.slice(0, 1).toUpperCase()}</span>
       <div className="application-info">
-        <strong className="application-name">{registration.full_name || 'Nome não informado'}</strong>
+        <strong className="application-name">
+          {registration.full_name || 'Nome não informado'}
+          {underage && <span className="underage-badge" title="Inscrição de menor de 18 anos">Menor de 18 anos ({age} anos)</span>}
+        </strong>
         <div className="application-contact-details">
           <div><small>Telefone</small><strong>{registration.phone ? maskPhone(registration.phone) : 'Não informado'}</strong></div>
           <div><small>E-mail</small><strong>{registration.email || 'Não informado'}</strong></div>
