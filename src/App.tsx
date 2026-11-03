@@ -117,7 +117,7 @@ const roles: Record<UserRole, string> = {
   catequizando: 'Catequizando',
 }
 
-type UserDirectoryProfile = Profile & { full_name: string }
+type UserDirectoryProfile = Profile & { full_name: string; active?: boolean }
 
 async function loadAuthenticatedProfile(
   client: NonNullable<typeof supabase>,
@@ -1661,6 +1661,7 @@ function Dashboard({
   const [catechistConfirmPassword, setCatechistConfirmPassword] = useState('')
   const [editingCatechistId, setEditingCatechistId] = useState<string | null>(null)
   const [deletingCatechistId, setDeletingCatechistId] = useState<string | null>(null)
+  const [managingCatequizandoId, setManagingCatequizandoId] = useState<string | null>(null)
   const [inviteName, setInviteName] = useState('')
   const [invitePhone, setInvitePhone] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
@@ -1732,7 +1733,7 @@ function Dashboard({
         ] = await Promise.all([
           client.from('t_catequista').select('id, full_name, phone, email, cpf, class_id').order('full_name'),
           client.from('profiles').select('id, role').order('role'),
-          client.from('t_catequizando').select('user_id, full_name').order('created_at', { ascending: false }),
+          client.from('t_catequizando').select('user_id, full_name, active').order('created_at', { ascending: false }),
           client.from('class_schedules').select('id, class_id, weekday, starts_at, ends_at, active, available, classes(name)').order('weekday'),
         ])
         if (!active) return
@@ -1743,13 +1744,16 @@ function Dashboard({
         if (profileRows) {
           const catechistNames = new Map((catechistRows ?? []).map((item) => [item.id, item.full_name]))
           const catequizandoNames = new Map<string, string>()
+          const inactiveUsers = new Set<string>()
           for (const item of catequizandoRows ?? []) {
             if (item.user_id && !catequizandoNames.has(item.user_id)) {
               catequizandoNames.set(item.user_id, item.full_name)
             }
+            if (item.user_id && !item.active) inactiveUsers.add(item.user_id)
           }
           setSystemProfiles(profileRows.map((item) => ({
             ...item,
+            active: !inactiveUsers.has(item.id),
             full_name: item.role === 'catequista'
               ? catechistNames.get(item.id) ?? roles[item.role]
               : item.role === 'catequizando'
@@ -1886,6 +1890,36 @@ function Dashboard({
       return next
     })
     setFeedback({ kind: 'success', text: 'Cadastro do catequizando excluído.' })
+  }
+
+  const manageCatequizando = async (registration: RegistrationRow, action: 'deactivate' | 'activate' | 'delete') => {
+    if (!supabase || profile.role !== 'coordenador') return
+    const confirmations = {
+      deactivate: `Desativar ${registration.full_name}? O acesso ao sistema será bloqueado.`,
+      activate: `Reativar ${registration.full_name}? O acesso ao sistema será liberado.`,
+      delete: `Excluir ${registration.full_name}? O cadastro e a conta de acesso serão removidos e isso não pode ser desfeito.`,
+    }
+    if (!window.confirm(confirmations[action])) return
+    setManagingCatequizandoId(registration.id)
+    setFeedback(null)
+    const { error } = await supabase.functions.invoke('manage-catequizando', {
+      body: { id: registration.id, action },
+    })
+    setManagingCatequizandoId(null)
+    if (error) {
+      setFeedback({ kind: 'error', text: 'Não foi possível concluir a ação para o catequizando.' })
+      return
+    }
+    if (action === 'delete') {
+      setApplications((current) => current.filter((item) => item.id !== registration.id))
+      if (registration.user_id) setSystemProfiles((current) => current.filter((item) => item.id !== registration.user_id))
+      setFeedback({ kind: 'success', text: 'Catequizando e conta de acesso excluídos.' })
+      return
+    }
+    const active = action === 'activate'
+    setApplications((current) => current.map((item) => item.id === registration.id ? { ...item, active } : item))
+    setSystemProfiles((current) => current.map((item) => item.id === registration.user_id ? { ...item, active } : item))
+    setFeedback({ kind: 'success', text: active ? 'Catequizando reativado.' : 'Catequizando desativado.' })
   }
 
   const createClass = async (event: FormEvent<HTMLFormElement>) => {
@@ -2532,7 +2566,7 @@ function Dashboard({
                     <div className="class-list-row" key={systemProfile.id}>
                       <span>{systemProfile.full_name}</span>
                       {systemProfile.role === 'catequizando' || systemProfile.id === profile.id ? (
-                        <small className={`role-badge role-${systemProfile.role}`}>{roles[systemProfile.role]}</small>
+                        <small className={`role-badge role-${systemProfile.role}`}>{roles[systemProfile.role]}{systemProfile.active === false ? ' · Inativo' : ''}</small>
                       ) : (
                         <select
                           aria-label={`Perfil de ${systemProfile.full_name}`}
@@ -2683,6 +2717,28 @@ function Dashboard({
                         <button type="button" className="button button-outline view-registration-button" onClick={() => setViewingRegistration(application)}>
                           <Eye size={15} /> Visualizar cadastro completo
                         </button>
+                        {application.active === false && <small className="role-badge role-inactive">Inativo</small>}
+                        {profile.role === 'coordenador' && (
+                          <div className="catequizando-actions">
+                            <button
+                              type="button"
+                              className="button button-outline"
+                              disabled={managingCatequizandoId === application.id}
+                              onClick={() => void manageCatequizando(application, application.active === false ? 'activate' : 'deactivate')}
+                            >
+                              {application.active === false ? 'Reativar' : 'Desativar'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={managingCatequizandoId === application.id}
+                              onClick={() => void manageCatequizando(application, 'delete')}
+                              aria-label={`Excluir catequizando ${application.full_name}`}
+                              title="Excluir catequizando"
+                            >
+                              {managingCatequizandoId === application.id ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />}
+                            </button>
+                          </div>
+                        )}
                       </article>
                     ))}
                   </div>

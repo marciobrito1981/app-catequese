@@ -99,6 +99,7 @@ export type RegistrationRow = {
   assigned_catechist_id: string | null
   assigned_class_id: string | null
   user_id: string | null
+  active: boolean
   created_at: string
 }
 

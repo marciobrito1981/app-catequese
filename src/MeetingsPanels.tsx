@@ -160,7 +160,7 @@ export function AttendancePanel({ registrations, onFeedback }: {
   const [saving, setSaving] = useState(false)
 
   const students = useMemo(
-    () => registrations.filter((item) => item.user_id && item.assigned_class_id),
+    () => registrations.filter((item) => item.user_id && item.active && item.assigned_class_id),
     [registrations],
   )
 
