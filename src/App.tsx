@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
-import { AttendancePanel, MeetingsManagement, NotificationsBanner } from './MeetingsPanels'
+import { AttendancePanel, MeetingsManagement, NotificationsBanner, TransferClassControl } from './MeetingsPanels'
 import {
   calculateAge,
   digits,
@@ -2377,7 +2377,7 @@ function Dashboard({
           <ErrorBanner feedback={feedback} />
           <NotificationsBanner profile={profile} />
           {profile.role === 'coordenador' && activeSection === 'meetings' && <MeetingsManagement onFeedback={setFeedback} />}
-          {profile.role !== 'catequizando' && activeSection === 'attendance' && <AttendancePanel registrations={applications} onFeedback={setFeedback} />}
+          {profile.role !== 'catequizando' && activeSection === 'attendance' && <AttendancePanel registrations={applications} role={profile.role} onFeedback={setFeedback} />}
           {profile.role === 'coordenador' && activeSection === 'schedules' && (
             <section className="schedule-management">
               <div className="dashboard-section-title">
@@ -2718,6 +2718,19 @@ function Dashboard({
                           <Eye size={15} /> Visualizar cadastro completo
                         </button>
                         {application.active === false && <small className="role-badge role-inactive">Inativo</small>}
+                        {application.active !== false && (
+                          <TransferClassControl
+                            registration={application}
+                            classes={classes}
+                            onFeedback={setFeedback}
+                            onTransferred={(registration, classId, permanent) => {
+                              if (!permanent) return
+                              setApplications((current) => profile.role === 'coordenador'
+                                ? current.map((item) => item.id === registration.id ? { ...item, assigned_class_id: classId } : item)
+                                : current.filter((item) => item.id !== registration.id))
+                            }}
+                          />
+                        )}
                         {profile.role === 'coordenador' && (
                           <div className="catequizando-actions">
                             <button

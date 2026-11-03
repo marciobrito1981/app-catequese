@@ -177,6 +177,12 @@ export type Database = {
         Update: Partial<AttendanceRecord & { recorded_by: string | null; recorded_at: string }>
         Relationships: []
       }
+      class_transfers: {
+        Row: { id: string; catequizando_id: string; meeting_id: string; to_class_id: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       notifications: {
         Row: AppNotification & { user_id: string }
         Insert: never
@@ -241,6 +247,10 @@ export type Database = {
       }
       set_coordinator_catechist: {
         Args: { p_user_id: string; p_enabled: boolean; p_class_id?: string | null }
+        Returns: undefined
+      }
+      transfer_catequizando: {
+        Args: { p_catequizando_id: string; p_class_id: string; p_meeting_id?: string | null }
         Returns: undefined
       }
       change_user_role: {

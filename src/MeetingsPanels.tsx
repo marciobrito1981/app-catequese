@@ -148,31 +148,43 @@ export function MeetingsManagement({ onFeedback }: { onFeedback: Notify }) {
   )
 }
 
-export function AttendancePanel({ registrations, onFeedback }: {
+export function AttendancePanel({ registrations, role, onFeedback }: {
   registrations: RegistrationRow[]
+  role: AuthenticatedProfile['role']
   onFeedback: Notify
 }) {
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([])
+  const [transfers, setTransfers] = useState<{ catequizando_id: string; meeting_id: string; to_class_id: string }[]>([])
+  const [myClassId, setMyClassId] = useState<string | null>(null)
   const [maxAbsences, setMaxAbsences] = useState(0)
   const [meetingId, setMeetingId] = useState('')
   const [marks, setMarks] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
 
-  const students = useMemo(
-    () => registrations.filter((item) => item.user_id && item.active && item.assigned_class_id),
-    [registrations],
-  )
+  const students = useMemo(() => {
+    const confirmed = registrations.filter((item) => item.user_id && item.active && item.assigned_class_id)
+    if (role === 'coordenador' || !meetingId) return confirmed
+    return confirmed.filter((item) => {
+      const transfer = transfers.find((entry) => entry.catequizando_id === item.id && entry.meeting_id === meetingId)
+      return (transfer ? transfer.to_class_id : item.assigned_class_id) === myClassId
+    })
+  }, [registrations, role, meetingId, transfers, myClassId])
 
   const load = useCallback(async () => {
     if (!supabase) return
-    const [{ data: meetingRows }, { data: attendanceRows }, { data: settings }] = await Promise.all([
+    const { data: userData } = await supabase.auth.getUser()
+    const [{ data: meetingRows }, { data: attendanceRows }, { data: settings }, { data: transferRows }, { data: ownRow }] = await Promise.all([
       supabase.from('meetings').select('*').order('meeting_number'),
       supabase.from('meeting_attendance').select('meeting_id, catequizando_id, present'),
       supabase.from('absence_settings').select('max_absences').eq('id', true).maybeSingle(),
+      supabase.from('class_transfers').select('catequizando_id, meeting_id, to_class_id'),
+      supabase.from('t_catequista').select('class_id').eq('id', userData.user?.id ?? '').maybeSingle(),
     ])
     setMeetings(meetingRows ?? [])
     setAllAttendance(attendanceRows ?? [])
+    setTransfers(transferRows ?? [])
+    setMyClassId(ownRow?.class_id ?? null)
     if (settings) setMaxAbsences(settings.max_absences)
   }, [])
 
@@ -251,6 +263,74 @@ export function AttendancePanel({ registrations, onFeedback }: {
         )}
       </div>
     </section>
+  )
+}
+
+export function TransferClassControl({ registration, classes, onFeedback, onTransferred }: {
+  registration: RegistrationRow
+  classes: { id: string; name: string; active: boolean }[]
+  onFeedback: Notify
+  onTransferred: (registration: RegistrationRow, classId: string, permanent: boolean) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [classId, setClassId] = useState('')
+  const [scope, setScope] = useState<'permanent' | 'meeting'>('permanent')
+  const [meetingId, setMeetingId] = useState('')
+  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open || !supabase) return
+    void supabase.from('meetings').select('*').order('meeting_number').then(({ data }) => setMeetings(data ?? []))
+  }, [open])
+
+  const submit = async () => {
+    if (!supabase || !classId || (scope === 'meeting' && !meetingId)) return
+    setSaving(true)
+    const { error } = await supabase.rpc('transfer_catequizando', {
+      p_catequizando_id: registration.id,
+      p_class_id: classId,
+      p_meeting_id: scope === 'meeting' ? meetingId : null,
+    })
+    setSaving(false)
+    if (error) {
+      onFeedback({ kind: 'error', text: error.message || 'Não foi possível transferir o catequizando.' })
+      return
+    }
+    onFeedback({
+      kind: 'success',
+      text: scope === 'permanent' ? 'Catequizando transferido de turma.' : 'Transferência temporária registrada para o encontro selecionado.',
+    })
+    setOpen(false)
+    setClassId('')
+    setMeetingId('')
+    onTransferred(registration, classId, scope === 'permanent')
+  }
+
+  if (!open) {
+    return <button type="button" className="button button-outline" onClick={() => setOpen(true)}>Transferir turma</button>
+  }
+  return (
+    <div className="transfer-control">
+      <select aria-label="Turma de destino" value={classId} onChange={(event) => setClassId(event.target.value)}>
+        <option value="">Turma de destino</option>
+        {classes.filter((item) => item.active && item.id !== registration.assigned_class_id).map((item) => (
+          <option key={item.id} value={item.id}>{item.name}</option>
+        ))}
+      </select>
+      <label><input type="radio" checked={scope === 'permanent'} onChange={() => setScope('permanent')} /> Permanente</label>
+      <label><input type="radio" checked={scope === 'meeting'} onChange={() => setScope('meeting')} /> Somente um encontro</label>
+      {scope === 'meeting' && (
+        <select aria-label="Encontro da transferência" value={meetingId} onChange={(event) => setMeetingId(event.target.value)}>
+          <option value="">Selecione o encontro</option>
+          {meetings.map((meeting) => <option key={meeting.id} value={meeting.id}>{meeting.meeting_number}. {meeting.theme}</option>)}
+        </select>
+      )}
+      <button type="button" className="button button-primary" disabled={saving || !classId || (scope === 'meeting' && !meetingId)} onClick={() => void submit()}>
+        {saving ? <LoaderCircle className="spin" size={15} /> : 'Confirmar'}
+      </button>
+      <button type="button" className="button button-outline" onClick={() => setOpen(false)}>Cancelar</button>
+    </div>
   )
 }
 
