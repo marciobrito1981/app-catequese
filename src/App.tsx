@@ -108,6 +108,8 @@ type AdminSchedule = {
   classes: { name: string } | null
 }
 
+const defaultProvisionalPassword = '12345678'
+
 const roles: Record<UserRole, string> = {
   coordenador: 'Coordenador',
   catequista: 'Catequista',
@@ -1675,8 +1677,6 @@ function Dashboard({
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [creatingAccountFor, setCreatingAccountFor] = useState<string | null>(null)
-  const [provisionalPassword, setProvisionalPassword] = useState('')
   const [accountLoadingId, setAccountLoadingId] = useState<string | null>(null)
   const handleSignOut = async () => {
     if (!await onSignOut()) {
@@ -1791,6 +1791,7 @@ function Dashboard({
   const filteredApplications = applications.filter((application) =>
     application.full_name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')),
   )
+  const pendingApplications = filteredApplications.filter((application) => !application.user_id)
   const confirmedCatequizandos = filteredApplications.filter((application) => application.user_id)
 
   const openCertificate = async (application: RegistrationRow) => {
@@ -1828,11 +1829,6 @@ function Dashboard({
 
   const createCatequizandoAccount = async (application: RegistrationRow) => {
     if (!supabase || profile.role !== 'coordenador') return
-    if (provisionalPassword.length < 8) {
-      setFeedback({ kind: 'error', text: 'A senha provisória deve ter pelo menos 8 caracteres.' })
-      return
-    }
-
     setAccountLoadingId(application.id)
     setFeedback(null)
     const { data, error } = await supabase.functions.invoke<{ user_id: string }>(
@@ -1840,7 +1836,7 @@ function Dashboard({
       {
         body: {
           registration_id: application.id,
-          provisional_password: provisionalPassword,
+          provisional_password: defaultProvisionalPassword,
         },
       },
     )
@@ -1862,11 +1858,9 @@ function Dashboard({
     setApplications((current) => current.map((item) =>
       item.id === application.id ? { ...item, user_id: data.user_id } : item,
     ))
-    setCreatingAccountFor(null)
-    setProvisionalPassword('')
     setFeedback({
       kind: 'success',
-      text: `Usuário criado para ${application.email}. No primeiro acesso, o catequizando deverá trocar a senha provisória.`,
+      text: `Inscrição confirmada. Usuário criado para ${application.email} com a senha temporária ${defaultProvisionalPassword}; ela deverá ser trocada no primeiro acesso.`,
     })
   }
 
@@ -2317,11 +2311,6 @@ function Dashboard({
             <h1>{roleHeading}</h1>
             <p>Olá, {profile.full_name.split(' ')[0]}. Que bom ter você por aqui.</p>
           </div>
-          <div className="dashboard-welcome-card">
-            <span className="welcome-card-icon"><Church size={23} /></span>
-            <div><strong>Um caminho que fazemos juntos.</strong><p>“Ide e fazei discípulos de todos os povos.” <span>— Mateus 28,19</span></p></div>
-            <Heart className="welcome-card-heart" size={20} />
-          </div>
           <ErrorBanner feedback={feedback} />
           {profile.role === 'coordenador' && activeSection === 'schedules' && (
             <section className="schedule-management">
@@ -2532,7 +2521,7 @@ function Dashboard({
             <>
               <div className="dashboard-section-title">
                 <div><h2>Inscrições recebidas</h2><p>Dados visíveis conforme seu perfil e suas responsabilidades.</p></div>
-                <span className="count-pill">{applications.length} {applications.length === 1 ? 'pessoa' : 'pessoas'}</span>
+                <span className="count-pill">{applications.filter((application) => !application.user_id).length} {applications.filter((application) => !application.user_id).length === 1 ? 'pessoa' : 'pessoas'}</span>
               </div>
               <div className="applications-card">
                 <div className="table-toolbar">
@@ -2544,11 +2533,11 @@ function Dashboard({
                 </div>
                 {loading ? (
                   <div className="dashboard-empty"><LoaderCircle className="spin" size={22} /> Carregando inscrições...</div>
-                ) : filteredApplications.length === 0 ? (
+                ) : pendingApplications.length === 0 ? (
                   <div className="dashboard-empty"><UsersRound size={25} /><strong>Nenhuma inscrição por aqui ainda</strong><span>Quando houver inscrições autorizadas para você, elas aparecerão nesta lista.</span></div>
                 ) : (
                   <div className="application-list">
-                    {filteredApplications.map((application) => (
+                    {pendingApplications.map((application) => (
                       <article className="application-row" key={application.id}>
                         <RegistrationSummary
                           registration={application}
@@ -2589,63 +2578,17 @@ function Dashboard({
                         </button>
                         {profile.role === 'coordenador' && (
                           <div className="row-actions registration-actions">
-                            {application.user_id ? (
-                              <span className="system-user-status">Usuário do sistema criado</span>
-                            ) : creatingAccountFor === application.id ? (
-                              <form
-                                className="create-account-form"
-                                onSubmit={(event) => {
-                                  event.preventDefault()
-                                  void createCatequizandoAccount(application)
-                                }}
-                              >
-                                <label>
-                                  Senha provisória para {application.email || 'e-mail não informado'}
-                                  <input
-                                    type="password"
-                                    autoComplete="new-password"
-                                    value={provisionalPassword}
-                                    onChange={(event) => setProvisionalPassword(event.target.value)}
-                                    minLength={8}
-                                    required
-                                    placeholder="Mínimo de 8 caracteres"
-                                  />
-                                </label>
-                                <button
-                                  className="button button-primary"
-                                  type="submit"
-                                  disabled={accountLoadingId === application.id || !application.email}
-                                >
-                                  {accountLoadingId === application.id
-                                    ? <><LoaderCircle className="spin" size={14} /> Criando...</>
-                                    : 'Confirmar criação'}
-                                </button>
-                                <button
-                                  className="button button-outline"
-                                  type="button"
-                                  onClick={() => {
-                                    setCreatingAccountFor(null)
-                                    setProvisionalPassword('')
-                                  }}
-                                  disabled={accountLoadingId === application.id}
-                                >
-                                  Cancelar
-                                </button>
-                              </form>
-                            ) : (
-                              <button
-                                className="button button-outline create-account-button"
-                                type="button"
-                                onClick={() => {
-                                  setCreatingAccountFor(application.id)
-                                  setProvisionalPassword('')
-                                }}
-                                disabled={!application.email}
-                                title={!application.email ? 'A inscrição não possui e-mail' : undefined}
-                              >
-                                Criar usuário sistema
-                              </button>
-                            )}
+                            <button
+                              className="button button-primary create-account-button"
+                              type="button"
+                              onClick={() => void createCatequizandoAccount(application)}
+                              disabled={accountLoadingId === application.id || !application.email}
+                              title={!application.email ? 'A inscrição não possui e-mail' : undefined}
+                            >
+                              {accountLoadingId === application.id
+                                ? <><LoaderCircle className="spin" size={14} /> Confirmando...</>
+                                : 'Confirmar inscrição'}
+                            </button>
                             <button type="button" onClick={() => void deleteCatequizando(application)} aria-label={`Excluir cadastro de ${application.full_name}`} title="Excluir catequizando"><Trash2 size={15} /></button>
                           </div>
                         )}
