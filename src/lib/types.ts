@@ -45,6 +45,28 @@ export type CatechistRecord = {
   class_id: string | null
 }
 
+export type Meeting = {
+  id: string
+  meeting_number: number
+  theme: string
+  mandatory: boolean
+  created_at: string
+}
+
+export type AttendanceRecord = {
+  meeting_id: string
+  catequizando_id: string
+  present: boolean
+}
+
+export type AppNotification = {
+  id: string
+  title: string
+  message: string
+  read_at: string | null
+  created_at: string
+}
+
 export type RegistrationRow = {
   id: string
   full_name: string
@@ -134,6 +156,30 @@ export type Database = {
         Row: RegistrationRow
         Insert: never
         Update: Partial<RegistrationRow>
+        Relationships: []
+      }
+      meetings: {
+        Row: Meeting
+        Insert: { meeting_number: number; theme: string; mandatory: boolean }
+        Update: Partial<{ meeting_number: number; theme: string; mandatory: boolean }>
+        Relationships: []
+      }
+      absence_settings: {
+        Row: { id: boolean; max_absences: number; updated_at: string }
+        Insert: never
+        Update: { max_absences?: number; updated_at?: string }
+        Relationships: []
+      }
+      meeting_attendance: {
+        Row: AttendanceRecord & { recorded_by: string | null; recorded_at: string }
+        Insert: AttendanceRecord & { recorded_by?: string | null; recorded_at?: string }
+        Update: Partial<AttendanceRecord & { recorded_by: string | null; recorded_at: string }>
+        Relationships: []
+      }
+      notifications: {
+        Row: AppNotification & { user_id: string }
+        Insert: never
+        Update: { read_at?: string | null }
         Relationships: []
       }
       registration_preferences: {

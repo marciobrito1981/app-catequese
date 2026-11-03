@@ -456,3 +456,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
   .modal-backdrop { padding: 0; align-items: flex-end; }
   .registration-modal { max-height: 94vh; border-radius: 12px 12px 0 0; }
 }
+.notifications-list { display: grid; gap: 6px; }
+.notifications-list .feedback { align-items: center; margin: 0; }
+.notifications-list .feedback span { flex: 1; }
