@@ -69,7 +69,7 @@ Deno.serve(async (request) => {
 
   const { data: registration, error: registrationError } = await adminClient
     .from('t_catequizando')
-    .select('id, full_name, email, phone, user_id')
+    .select('id, full_name, email, phone, user_id, assigned_class_id')
     .eq('id', registrationId)
     .single()
   if (registrationError || !registration) {
@@ -77,6 +77,9 @@ Deno.serve(async (request) => {
   }
   if (!registration.email) {
     return Response.json({ error: 'A inscrição não possui e-mail para criar o usuário.' }, { status: 400, headers: corsHeaders })
+  }
+  if (!registration.assigned_class_id) {
+    return Response.json({ error: 'Associe uma turma ao catequizando antes de confirmar a inscrição.' }, { status: 400, headers: corsHeaders })
   }
   if (registration.user_id) {
     return Response.json({ error: 'Esta inscrição já está vinculada a um usuário do sistema.' }, { status: 409, headers: corsHeaders })

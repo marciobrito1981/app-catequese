@@ -1829,6 +1829,11 @@ function Dashboard({
 
   const createCatequizandoAccount = async (application: RegistrationRow) => {
     if (!supabase || profile.role !== 'coordenador') return
+    if (!application.assigned_class_id) {
+      setFeedback({ kind: 'error', text: 'Associe uma turma ao catequizando antes de confirmar a inscrição.' })
+      return
+    }
+
     setAccountLoadingId(application.id)
     setFeedback(null)
     const { data, error } = await supabase.functions.invoke<{ user_id: string }>(
@@ -2582,8 +2587,8 @@ function Dashboard({
                               className="button button-primary create-account-button"
                               type="button"
                               onClick={() => void createCatequizandoAccount(application)}
-                              disabled={accountLoadingId === application.id || !application.email}
-                              title={!application.email ? 'A inscrição não possui e-mail' : undefined}
+                              disabled={accountLoadingId === application.id || !application.email || !application.assigned_class_id}
+                              title={!application.assigned_class_id ? 'Associe uma turma antes de confirmar' : !application.email ? 'A inscrição não possui e-mail' : undefined}
                             >
                               {accountLoadingId === application.id
                                 ? <><LoaderCircle className="spin" size={14} /> Confirmando...</>
