@@ -55,8 +55,8 @@ Deno.serve(async (request) => {
     .select('role')
     .eq('id', userData.user.id)
     .single()
-  if (roleError || callerProfile?.role !== 'administrador') {
-    return Response.json({ error: 'Somente administradores podem cadastrar catequistas.' }, { status: 403, headers: corsHeaders })
+  if (roleError || callerProfile?.role !== 'coordenador') {
+    return Response.json({ error: 'Somente coordenadores podem cadastrar catequistas.' }, { status: 403, headers: corsHeaders })
   }
 
   let body: { full_name?: unknown; email?: unknown; phone?: unknown; cpf?: unknown; class_id?: unknown; role?: unknown; send_invite?: unknown; initial_password?: unknown }
@@ -83,7 +83,7 @@ Deno.serve(async (request) => {
     !fullName || fullName.length > 150 ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 ||
     !/^\d{10,11}$/.test(phone) ||
-    (role !== 'administrador' && role !== 'catequista' && role !== 'catequizando') ||
+    (role !== 'coordenador' && role !== 'catequista' && role !== 'catequizando') ||
     classId === undefined ||
     (role === 'catequista' && !isValidCpf(cpf)) ||
     (role !== 'catequista' && classId !== null) ||

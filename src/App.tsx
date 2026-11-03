@@ -109,7 +109,7 @@ type AdminSchedule = {
 }
 
 const roles: Record<UserRole, string> = {
-  administrador: 'Administrador',
+  coordenador: 'Coordenador',
   catequista: 'Catequista',
   catequizando: 'Catequizando',
 }
@@ -365,7 +365,7 @@ function App() {
     return <RegistrationPage onBack={() => setScreen('login')} />
   }
 
-  if (screen === 'catequizando-registration' && profile?.role === 'administrador') {
+  if (screen === 'catequizando-registration' && profile?.role === 'coordenador') {
     return (
       <RegistrationPage
         onBack={() => setScreen('dashboard')}
@@ -1725,7 +1725,7 @@ function Dashboard({
 
       const rows = (data ?? []) as RegistrationRow[]
       setApplications(rows)
-      if (profile.role === 'administrador') {
+      if (profile.role === 'coordenador') {
         const [
           { data: catechistRows, error: catechistError },
           { data: profileRows, error: profilesError },
@@ -1741,7 +1741,10 @@ function Dashboard({
         if (catechistError || profilesError || catequizandoError || scheduleError) {
           setFeedback({ kind: 'error', text: 'Não foi possível carregar todos os dados de administração.' })
         }
-        if (catechistRows) setCatechists(catechistRows)
+        if (catechistRows) {
+          const coordinatorIds = new Set((profileRows ?? []).filter((item) => item.role === 'coordenador').map((item) => item.id))
+          setCatechists(catechistRows.filter((item) => !coordinatorIds.has(item.id)))
+        }
         if (profileRows) {
           const catechistNames = new Map((catechistRows ?? []).map((item) => [item.id, item.full_name]))
           const catequizandoNames = new Map<string, string>()
@@ -1826,7 +1829,7 @@ function Dashboard({
   }
 
   const createCatequizandoAccount = async (application: RegistrationRow) => {
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     if (provisionalPassword.length < 8) {
       setFeedback({ kind: 'error', text: 'A senha provisória deve ter pelo menos 8 caracteres.' })
       return
@@ -1870,7 +1873,7 @@ function Dashboard({
   }
 
   const deleteCatequizando = async (registration: RegistrationRow) => {
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     if (!window.confirm(`Excluir o cadastro de ${registration.full_name}? Esta ação não pode ser desfeita.`)) return
     setFeedback(null)
     const { error } = await supabase
@@ -1892,7 +1895,7 @@ function Dashboard({
 
   const createClass = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     const name = newClassName.trim()
     if (!name) return
     const result = editingClassId
@@ -1929,7 +1932,7 @@ function Dashboard({
 
   const createSchedule = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!supabase || profile.role !== 'administrador' || !newSchedule.classId) return
+    if (!supabase || profile.role !== 'coordenador' || !newSchedule.classId) return
     const wasEditing = Boolean(editingScheduleId)
     const scheduleValues = {
         class_id: newSchedule.classId,
@@ -1971,7 +1974,7 @@ function Dashboard({
   }
 
   const deleteSchedule = async (schedule: AdminSchedule) => {
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     if (!window.confirm(`Excluir o horário de ${schedule.classes?.name ?? 'Turma'}? As preferências de inscrição vinculadas a ele também serão removidas.`)) return
     const { error } = await supabase.rpc('delete_class_schedule', { p_schedule_id: schedule.id })
     if (error) {
@@ -1992,7 +1995,7 @@ function Dashboard({
   }
 
   const deleteClass = async (classItem: { id: string; name: string; active: boolean }) => {
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     if (!window.confirm(`Excluir a turma ${classItem.name}? Os horários e as preferências de inscrição vinculados também serão removidos.`)) return
     const { error } = await supabase.rpc('delete_class_record', { p_class_id: classItem.id })
     if (error) {
@@ -2028,7 +2031,7 @@ function Dashboard({
   }
 
   const toggleScheduleAvailability = async (schedule: AdminSchedule, field: 'active' | 'available') => {
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     const result = field === 'active'
       ? await supabase.from('class_schedules').update({ active: !schedule.active }).eq('id', schedule.id)
       : await supabase.from('class_schedules').update({ available: !schedule.available }).eq('id', schedule.id)
@@ -2044,7 +2047,7 @@ function Dashboard({
   }
 
   const toggleClassActive = async (classItem: { id: string; name: string; active: boolean }) => {
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     const { error } = await supabase
       .from('classes')
       .update({ active: !classItem.active })
@@ -2078,7 +2081,7 @@ function Dashboard({
 
   const registerCatechist = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     if (editingCatechistId) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(catechistEmail.trim())) {
         setFeedback({ kind: 'error', text: 'Informe um e-mail válido para o catequista.' })
@@ -2175,7 +2178,7 @@ function Dashboard({
   }
 
   const deleteCatechist = async (catechist: CatechistRecord) => {
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     if (!window.confirm(`Excluir o catequista ${catechist.full_name}? A conta de acesso também será removida.`)) return
     setDeletingCatechistId(catechist.id)
     setFeedback(null)
@@ -2195,7 +2198,7 @@ function Dashboard({
 
   const inviteProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!supabase || profile.role !== 'administrador') return
+    if (!supabase || profile.role !== 'coordenador') return
     if (inviteRole === 'catequista' && !isValidCpf(inviteCpf)) {
       setFeedback({ kind: 'error', text: 'Informe um CPF válido para o catequista.' })
       return
@@ -2247,7 +2250,30 @@ function Dashboard({
     })
   }
 
-  const roleHeading = profile.role === 'administrador'
+  const changeUserRole = async (target: UserDirectoryProfile, newRole: UserRole) => {
+    if (!supabase || profile.role !== 'coordenador' || target.role === newRole) return
+    setFeedback(null)
+    const { error } = await supabase.rpc('change_user_role', { p_user_id: target.id, p_role: newRole })
+    if (error) {
+      setFeedback({ kind: 'error', text: error.message || 'Não foi possível alterar o perfil.' })
+      return
+    }
+    setSystemProfiles((current) => current.map((item) => item.id === target.id ? { ...item, role: newRole } : item))
+    const { data: catechistRows } = await supabase
+      .from('t_catequista')
+      .select('id, full_name, phone, email, cpf, class_id')
+      .order('full_name')
+    if (catechistRows) {
+      setCatechists(catechistRows.filter((item) => item.id !== target.id || newRole === 'catequista'))
+      const catechistName = catechistRows.find((item) => item.id === target.id)?.full_name
+      if (catechistName) {
+        setSystemProfiles((current) => current.map((item) => item.id === target.id ? { ...item, full_name: catechistName } : item))
+      }
+    }
+    setFeedback({ kind: 'success', text: `Perfil alterado para ${roles[newRole].toLocaleLowerCase('pt-BR')}.` })
+  }
+
+  const roleHeading = profile.role === 'coordenador'
     ? 'Visão geral da catequese'
     : profile.role === 'catequista'
       ? 'Suas inscrições acompanhadas'
@@ -2261,11 +2287,11 @@ function Dashboard({
           <span>São José<small>CATEQUESE DE ADULTOS</small></span>
         </div>
         <div className="sidebar-section-label">ESPAÇO DE TRABALHO</div>
-        <button className={`sidebar-nav-item ${activeSection === 'applications' ? 'active' : ''}`} onClick={() => { setActiveSection('applications'); onCloseMenu() }}><UsersRound size={18} /> {profile.role === 'administrador' ? 'Inscrições' : roles[profile.role]}</button>
+        <button className={`sidebar-nav-item ${activeSection === 'applications' ? 'active' : ''}`} onClick={() => { setActiveSection('applications'); onCloseMenu() }}><UsersRound size={18} /> {profile.role === 'coordenador' ? 'Inscrições' : roles[profile.role]}</button>
         {profile.role !== 'catequizando' && (
           <button className={`sidebar-nav-item ${activeSection === 'catequizandos' ? 'active' : ''}`} onClick={() => { setActiveSection('catequizandos'); onCloseMenu() }}><Search size={18} /> Consultar catequizando</button>
         )}
-        {profile.role === 'administrador' && (
+        {profile.role === 'coordenador' && (
           <>
             <button className={`sidebar-nav-item ${activeSection === 'catechists' ? 'active' : ''}`} onClick={() => { setActiveSection('catechists'); onCloseMenu() }}><UserPlus size={18} /> Cadastrar catequista</button>
             <button className={`sidebar-nav-item ${activeSection === 'profiles' ? 'active' : ''}`} onClick={() => { setActiveSection('profiles'); onCloseMenu() }}><ShieldCheck size={18} /> Perfis de acesso</button>
@@ -2299,7 +2325,7 @@ function Dashboard({
             <Heart className="welcome-card-heart" size={20} />
           </div>
           <ErrorBanner feedback={feedback} />
-          {profile.role === 'administrador' && activeSection === 'schedules' && (
+          {profile.role === 'coordenador' && activeSection === 'schedules' && (
             <section className="schedule-management">
               <div className="dashboard-section-title">
                 <div><h2>Turmas e horários</h2><p>Somente horários ativos e disponíveis aparecem no formulário público.</p></div>
@@ -2376,7 +2402,7 @@ function Dashboard({
               </div>
             </section>
           )}
-          {profile.role === 'administrador' && activeSection === 'catechists' && (
+          {profile.role === 'coordenador' && activeSection === 'catechists' && (
             <section className="schedule-management">
               <div className="dashboard-section-title">
                 <div><h2>Cadastro de catequista</h2><p>Preencha os dados para cadastrar o catequista no sistema.</p></div>
@@ -2438,7 +2464,7 @@ function Dashboard({
               </div>
             </section>
           )}
-          {profile.role === 'administrador' && activeSection === 'profiles' && (
+          {profile.role === 'coordenador' && activeSection === 'profiles' && (
             <section className="schedule-management">
               <div className="dashboard-section-title">
                 <div><h2>Perfis de acesso</h2><p>Crie contas para os três perfis. Convites são enviados por e-mail.</p></div>
@@ -2456,7 +2482,7 @@ function Dashboard({
                       <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as UserRole)}>
                         <option value="catequizando">Catequizando</option>
                         <option value="catequista">Catequista</option>
-                        <option value="administrador">Administrador</option>
+                        <option value="coordenador">Coordenador</option>
                       </select>
                     </label>
                     {inviteRole === 'catequista' && (
@@ -2473,8 +2499,8 @@ function Dashboard({
                       </label>
                     )}
                   </div>
-                  {inviteRole === 'administrador' && (
-                    <p className="role-warning">Administradores têm acesso amplo aos dados. Conceda esse perfil somente a pessoas autorizadas.</p>
+                  {inviteRole === 'coordenador' && (
+                    <p className="role-warning">Coordenadores têm acesso amplo aos dados. Conceda esse perfil somente a pessoas autorizadas.</p>
                   )}
                   <button className="button button-primary" type="submit" disabled={profileInviteLoading}>
                     {profileInviteLoading ? <><LoaderCircle className="spin" size={16} /> Criando perfil...</> : <>Criar perfil e enviar convite <ArrowRight size={15} /></>}
@@ -2486,7 +2512,18 @@ function Dashboard({
                   {systemProfiles.length === 0 ? <span className="empty-class-list">Nenhum perfil cadastrado.</span> : systemProfiles.map((systemProfile) => (
                     <div className="class-list-row" key={systemProfile.id}>
                       <span>{systemProfile.full_name}</span>
-                      <small className={`role-badge role-${systemProfile.role}`}>{roles[systemProfile.role]}</small>
+                      {systemProfile.role === 'catequizando' || systemProfile.id === profile.id ? (
+                        <small className={`role-badge role-${systemProfile.role}`}>{roles[systemProfile.role]}</small>
+                      ) : (
+                        <select
+                          aria-label={`Perfil de ${systemProfile.full_name}`}
+                          value={systemProfile.role}
+                          onChange={(event) => void changeUserRole(systemProfile, event.target.value as UserRole)}
+                        >
+                          <option value="catequista">Catequista</option>
+                          <option value="coordenador">Coordenador</option>
+                        </select>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2527,7 +2564,7 @@ function Dashboard({
                             ).join(', ')}
                           </span>
                         ) : <span className="application-preferences">Sem preferência de horário</span>}
-                        {profile.role === 'administrador' && (
+                        {profile.role === 'coordenador' && (
                           <label className="assignment-field">
                             <span>Turma do catequizando</span>
                             <select
@@ -2552,7 +2589,7 @@ function Dashboard({
                         <button type="button" className="button button-outline view-registration-button" onClick={() => setViewingRegistration(application)}>
                           <Eye size={15} /> Visualizar cadastro
                         </button>
-                        {profile.role === 'administrador' && (
+                        {profile.role === 'coordenador' && (
                           <div className="row-actions registration-actions">
                             {application.user_id ? (
                               <span className="system-user-status">Usuário do sistema criado</span>
@@ -2633,7 +2670,7 @@ function Dashboard({
                     <UserRound size={17} />
                     <input aria-label="Buscar catequizando" placeholder="Buscar por nome..." value={search} onChange={(event) => setSearch(event.target.value)} />
                   </div>
-                  {profile.role === 'administrador' && (
+                  {profile.role === 'coordenador' && (
                     <button className="button button-outline" type="button" onClick={onNavigateToRegistration}><UserPlus size={15} /> Novo catequizando</button>
                   )}
                   <span className="private-data-note"><ShieldCheck size={15} /> Acesso restrito</span>

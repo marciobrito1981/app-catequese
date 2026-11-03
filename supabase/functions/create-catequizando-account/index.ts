@@ -63,8 +63,8 @@ Deno.serve(async (request) => {
     .select('role')
     .eq('id', userData.user.id)
     .single()
-  if (roleError || callerProfile?.role !== 'administrador') {
-    return Response.json({ error: 'Somente administradores podem criar usuários de catequizandos.' }, { status: 403, headers: corsHeaders })
+  if (roleError || callerProfile?.role !== 'coordenador') {
+    return Response.json({ error: 'Somente coordenadores podem criar usuários de catequizandos.' }, { status: 403, headers: corsHeaders })
   }
 
   const { data: registration, error: registrationError } = await adminClient

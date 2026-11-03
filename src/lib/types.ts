@@ -1,4 +1,4 @@
-export type UserRole = 'administrador' | 'catequista' | 'catequizando'
+export type UserRole = 'coordenador' | 'catequista' | 'catequizando'
 
 export type Schedule = {
   id: string
@@ -191,6 +191,10 @@ export type Database = {
       delete_class_record: {
         Args: { p_class_id: string }
         Returns: undefined
+      }
+      change_user_role: {
+        Args: { p_user_id: string; p_role: UserRole }
+        Returns: UserRole
       }
     }
     Enums: Record<string, never>

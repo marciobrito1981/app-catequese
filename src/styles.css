@@ -329,7 +329,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
 .management-card > .button { min-height: 36px; font-size: 10px; }
 .role-warning { border-left: 2px solid #c6a45e; padding-left: 9px; color: #806b43 !important; }
 .role-badge { border-radius: 20px; padding: 4px 8px; font-size: 9px; white-space: nowrap; }
-.role-administrador { color: #765d29; background: #f5efdf; }
+.role-coordenador { color: #765d29; background: #f5efdf; }
 .role-catequista { color: #3e6475; background: #eaf2f5; }
 .role-catequizando { color: #54735a; background: #edf4ed; }
 .schedule-list { margin-top: 4px; }

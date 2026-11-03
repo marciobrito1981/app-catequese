@@ -56,8 +56,8 @@ Deno.serve(async (request) => {
     .select('role')
     .eq('id', userData.user.id)
     .single()
-  if (roleError || callerProfile?.role !== 'administrador') {
-    return Response.json({ error: 'Somente administradores podem editar catequistas.' }, { status: 403, headers: corsHeaders })
+  if (roleError || callerProfile?.role !== 'coordenador') {
+    return Response.json({ error: 'Somente coordenadores podem editar catequistas.' }, { status: 403, headers: corsHeaders })
   }
 
   let body: { id?: unknown; full_name?: unknown; email?: unknown; phone?: unknown; cpf?: unknown; class_id?: unknown }
