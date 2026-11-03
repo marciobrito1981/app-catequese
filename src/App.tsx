@@ -382,7 +382,6 @@ function App() {
     return (
       <Dashboard
         profile={profile}
-        onNavigateToRegistration={() => setScreen('catequizando-registration')}
         onNavigateToProfile={() => setScreen('profile')}
         onSignOut={signOut}
         mobileMenuOpen={mobileMenuOpen}
@@ -1634,7 +1633,6 @@ function Dashboard({
   mobileMenuOpen,
   onToggleMenu,
   onCloseMenu,
-  onNavigateToRegistration,
   onNavigateToProfile,
 }: {
   profile: AuthenticatedProfile
@@ -1642,7 +1640,6 @@ function Dashboard({
   mobileMenuOpen: boolean
   onToggleMenu: () => void
   onCloseMenu: () => void
-  onNavigateToRegistration: () => void
   onNavigateToProfile: () => void
 }) {
   const [applications, setApplications] = useState<RegistrationRow[]>([])
@@ -1794,6 +1791,7 @@ function Dashboard({
   const filteredApplications = applications.filter((application) =>
     application.full_name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')),
   )
+  const confirmedCatequizandos = filteredApplications.filter((application) => application.user_id)
 
   const openCertificate = async (application: RegistrationRow) => {
     if (!supabase || !application.marriage_certificate_path) return
@@ -2662,7 +2660,7 @@ function Dashboard({
             <>
               <div className="dashboard-section-title">
                 <div><h2>Consultar catequizando</h2><p>Consulte os dados dos catequizandos cadastrados. Os cadastros são somente para leitura.</p></div>
-                <span className="count-pill">{applications.length} {applications.length === 1 ? 'pessoa' : 'pessoas'}</span>
+                <span className="count-pill">{applications.filter((application) => application.user_id).length} {applications.filter((application) => application.user_id).length === 1 ? 'pessoa' : 'pessoas'}</span>
               </div>
               <div className="applications-card">
                 <div className="table-toolbar">
@@ -2670,18 +2668,15 @@ function Dashboard({
                     <UserRound size={17} />
                     <input aria-label="Buscar catequizando" placeholder="Buscar por nome..." value={search} onChange={(event) => setSearch(event.target.value)} />
                   </div>
-                  {profile.role === 'coordenador' && (
-                    <button className="button button-outline" type="button" onClick={onNavigateToRegistration}><UserPlus size={15} /> Novo catequizando</button>
-                  )}
                   <span className="private-data-note"><ShieldCheck size={15} /> Acesso restrito</span>
                 </div>
                 {loading ? (
                   <div className="dashboard-empty"><LoaderCircle className="spin" size={22} /> Carregando catequizandos...</div>
-                ) : filteredApplications.length === 0 ? (
+                ) : confirmedCatequizandos.length === 0 ? (
                   <div className="dashboard-empty"><UsersRound size={25} /><strong>Nenhum catequizando encontrado</strong><span>Os catequizandos autorizados para você aparecerão nesta lista.</span></div>
                 ) : (
                   <div className="application-list">
-                    {filteredApplications.map((application) => (
+                    {confirmedCatequizandos.map((application) => (
                       <article className="application-row" key={application.id}>
                         <RegistrationSummary
                           registration={application}
