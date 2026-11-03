@@ -459,3 +459,4 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
 .notifications-list { display: grid; gap: 6px; }
 .notifications-list .feedback { align-items: center; margin: 0; }
 .notifications-list .feedback span { flex: 1; }
+.coordinator-catechist { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; font-size: 9px; }

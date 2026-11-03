@@ -238,6 +238,10 @@ export type Database = {
         Args: { p_class_id: string }
         Returns: undefined
       }
+      set_coordinator_catechist: {
+        Args: { p_user_id: string; p_enabled: boolean; p_class_id?: string | null }
+        Returns: undefined
+      }
       change_user_role: {
         Args: { p_user_id: string; p_role: UserRole }
         Returns: UserRole

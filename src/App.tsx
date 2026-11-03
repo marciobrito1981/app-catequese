@@ -1739,10 +1739,7 @@ function Dashboard({
         if (catechistError || profilesError || catequizandoError || scheduleError) {
           setFeedback({ kind: 'error', text: 'Não foi possível carregar todos os dados de administração.' })
         }
-        if (catechistRows) {
-          const coordinatorIds = new Set((profileRows ?? []).filter((item) => item.role === 'coordenador').map((item) => item.id))
-          setCatechists(catechistRows.filter((item) => !coordinatorIds.has(item.id)))
-        }
+        if (catechistRows) setCatechists(catechistRows)
         if (profileRows) {
           const catechistNames = new Map((catechistRows ?? []).map((item) => [item.id, item.full_name]))
           const catequizandoNames = new Map<string, string>()
@@ -1757,7 +1754,7 @@ function Dashboard({
               ? catechistNames.get(item.id) ?? roles[item.role]
               : item.role === 'catequizando'
                 ? catequizandoNames.get(item.id) ?? roles[item.role]
-                : item.id === profile.id ? profile.full_name : roles[item.role],
+                : catechistNames.get(item.id) ?? (item.id === profile.id ? profile.full_name : roles[item.role]),
           })))
         }
         if (scheduleRows) setAdminSchedules(scheduleRows as AdminSchedule[])
@@ -2262,7 +2259,7 @@ function Dashboard({
       .select('id, full_name, phone, email, cpf, class_id')
       .order('full_name')
     if (catechistRows) {
-      setCatechists(catechistRows.filter((item) => item.id !== target.id || newRole === 'catequista'))
+      setCatechists(catechistRows)
       const catechistName = catechistRows.find((item) => item.id === target.id)?.full_name
       if (catechistName) {
         setSystemProfiles((current) => current.map((item) => item.id === target.id ? { ...item, full_name: catechistName } : item))
@@ -2271,8 +2268,30 @@ function Dashboard({
     setFeedback({ kind: 'success', text: `Perfil alterado para ${roles[newRole].toLocaleLowerCase('pt-BR')}.` })
   }
 
-  const roleHeading = profile.role === 'coordenador'
-    ? 'Visão geral da catequese'
+  const setCoordinatorCatechist = async (target: UserDirectoryProfile, enabled: boolean, classId: string | null) => {
+    if (!supabase || profile.role !== 'coordenador' || target.role !== 'coordenador') return
+    setFeedback(null)
+    const { error } = await supabase.rpc('set_coordinator_catechist', {
+      p_user_id: target.id,
+      p_enabled: enabled,
+      p_class_id: enabled ? classId : null,
+    })
+    if (error) {
+      setFeedback({ kind: 'error', text: error.message || 'Não foi possível atualizar o vínculo de catequista.' })
+      return
+    }
+    const { data: catechistRows } = await supabase
+      .from('t_catequista')
+      .select('id, full_name, phone, email, cpf, class_id')
+      .order('full_name')
+    if (catechistRows) setCatechists(catechistRows)
+    setFeedback({
+      kind: 'success',
+      text: enabled ? 'Coordenador vinculado como catequista.' : 'Vínculo de catequista removido.',
+    })
+  }
+
+  const roleHeading = profile.role === 'coordenador'    ? 'Visão geral da catequese'
     : profile.role === 'catequista'
       ? 'Suas inscrições acompanhadas'
       : 'Seu caminho na catequese'
@@ -2437,7 +2456,7 @@ function Dashboard({
                 </form>
                 <div className="management-card catechist-directory">
                   <h3>Catequistas cadastrados</h3>
-                  <p>Contas com perfil de catequista.</p>
+                  <p>Catequistas e coordenadores que também atuam como catequista.</p>
                   {catechists.length === 0 ? <span className="empty-class-list">Nenhum catequista cadastrado.</span> : catechists.map((catechist) => (
                     <div className="class-list-row catechist-row" key={catechist.id}>
                       <span className="catechist-identity">
@@ -2445,7 +2464,7 @@ function Dashboard({
                         <small>{catechist.email || 'E-mail não informado'}{catechist.cpf ? ` · CPF ${maskCpf(catechist.cpf)}` : ' · CPF não informado'}</small>
                       </span>
                       <div className="row-actions">
-                        <small>Catequista</small>
+                        <small>{systemProfiles.find((item) => item.id === catechist.id)?.role === 'coordenador' ? 'Coordenador e catequista' : 'Catequista'}</small>
                         <button type="button" onClick={() => {
                           setEditingCatechistId(catechist.id)
                           setCatechistName(catechist.full_name)
@@ -2454,9 +2473,9 @@ function Dashboard({
                           setCatechistCpf(catechist.cpf ?? '')
                           setCatechistClassId(catechist.class_id ?? '')
                         }} aria-label={`Editar catequista ${catechist.full_name}`} title="Editar catequista"><Pencil size={14} /></button>
-                        <button type="button" disabled={deletingCatechistId === catechist.id} onClick={() => void deleteCatechist(catechist)} aria-label={`Excluir catequista ${catechist.full_name}`} title="Excluir catequista">
+                        {systemProfiles.find((item) => item.id === catechist.id)?.role !== 'coordenador' && <button type="button" disabled={deletingCatechistId === catechist.id} onClick={() => void deleteCatechist(catechist)} aria-label={`Excluir catequista ${catechist.full_name}`} title="Excluir catequista">
                           {deletingCatechistId === catechist.id ? <LoaderCircle className="spin" size={14} /> : <Trash2 size={14} />}
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   ))}
@@ -2524,7 +2543,29 @@ function Dashboard({
                           <option value="coordenador">Coordenador</option>
                         </select>
                       )}
-                    </div>
+                      {systemProfile.role === 'coordenador' && (
+                        <span className="coordinator-catechist">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={catechists.some((item) => item.id === systemProfile.id)}
+                              onChange={(event) => void setCoordinatorCatechist(systemProfile, event.target.checked, catechists.find((item) => item.id === systemProfile.id)?.class_id ?? null)}
+                            /> Também é catequista
+                          </label>
+                          {catechists.some((item) => item.id === systemProfile.id) && (
+                            <select
+                              aria-label={`Turma de ${systemProfile.full_name}`}
+                              value={catechists.find((item) => item.id === systemProfile.id)?.class_id ?? ''}
+                              onChange={(event) => void setCoordinatorCatechist(systemProfile, true, event.target.value || null)}
+                            >
+                              <option value="">Sem turma</option>
+                              {classes.filter((classItem) => classItem.active || classItem.id === catechists.find((item) => item.id === systemProfile.id)?.class_id).map((classItem) =>
+                                <option key={classItem.id} value={classItem.id}>{classItem.name}</option>,
+                              )}
+                            </select>
+                          )}
+                        </span>
+                      )}                    </div>
                   ))}
                 </div>
               </div>
