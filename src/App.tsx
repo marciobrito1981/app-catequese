@@ -1192,7 +1192,7 @@ function ProfilePage({
     })
     setNewPassword('')
     setConfirmPassword('')
-  }
+  } 
 
   const cancelEditing = () => {
     resetForm()
