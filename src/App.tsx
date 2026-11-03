@@ -1170,7 +1170,7 @@ function ProfilePage({
     neighborhood: profile.address?.neighborhood ?? '',
     city: profile.address?.city ?? '',
     state: profile.address?.state ?? '',
-  })
+  }) 
   const [editing, setEditing] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
