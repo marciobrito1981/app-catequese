@@ -598,6 +598,26 @@ function RegistrationPage({
     setValues((current) => ({ ...current, [key]: value }))
   }
 
+  const availableWeekdays = useMemo(() => {
+    const byDay = new Map<number, { ids: string[]; times: string[] }>()
+    schedules.forEach((schedule) => {
+      const entry = byDay.get(schedule.weekday) ?? { ids: [], times: [] }
+      const time = `${schedule.starts_at.slice(0, 5)} às ${schedule.ends_at.slice(0, 5)}`
+      entry.ids.push(schedule.id)
+      if (!entry.times.includes(time)) entry.times.push(time)
+      byDay.set(schedule.weekday, entry)
+    })
+    return [...byDay.entries()].sort((a, b) => a[0] - b[0])
+  }, [schedules])
+
+  const toggleWeekday = (ids: string[]) => {
+    setValues((current) => {
+      const all = ids.every((id) => current.scheduleIds.includes(id))
+      const rest = current.scheduleIds.filter((id) => !ids.includes(id))
+      return { ...current, scheduleIds: all ? rest : [...rest, ...ids] }
+    })
+  }
+
   const toggleOption = (key: 'sacraments' | 'scheduleIds', option: string) => {
     const selected = values[key]
     let next: string[]
@@ -949,19 +969,22 @@ function RegistrationPage({
         </section>
 
         <section className="form-section">
-          <SectionHeading number={String(4 + formSectionOffset).padStart(2, '0')} icon={<CalendarDays size={20} />} title="Dias e horários" description="Marque todas as opções que funcionam para você. São preferências, não uma matrícula." />
+          <SectionHeading number={String(4 + formSectionOffset).padStart(2, '0')} icon={<CalendarDays size={20} />} title="Dias e horários" description="Marque os dias da semana que funcionam para você." />
           <div className="options-grid schedule-options">
             {schedulesLoading && <div className="inline-loading"><LoaderCircle className="spin" size={17} /> Carregando horários disponíveis...</div>}
             {!schedulesLoading && schedules.length === 0 && (
               <p className="empty-options">{isConfigurationMissing() ? 'Os horários aparecerão aqui quando o sistema for conectado.' : 'No momento não há horários disponíveis. Você poderá concluir sua inscrição sem selecionar uma preferência.'}</p>
             )}
-            {schedules.map((schedule) => (
-              <label className={`select-card ${values.scheduleIds.includes(schedule.id) ? 'selected' : ''}`} key={schedule.id}>
-                <input type="checkbox" checked={values.scheduleIds.includes(schedule.id)} onChange={() => toggleOption('scheduleIds', schedule.id)} />
-                <span className="check-box"><Check size={13} /></span>
-                <span><strong>{weekdays[schedule.weekday]}</strong><small>{schedule.starts_at.slice(0, 5)} às {schedule.ends_at.slice(0, 5)} · {schedule.classes?.name}</small></span>
-              </label>
-            ))}
+            {availableWeekdays.map(([weekday, { ids, times }]) => {
+              const checked = ids.every((id) => values.scheduleIds.includes(id))
+              return (
+                <label className={`select-card ${checked ? 'selected' : ''}`} key={weekday}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleWeekday(ids)} />
+                  <span className="check-box"><Check size={13} /></span>
+                  <span><strong>{weekdays[weekday]}</strong><small>{times.join(' · ')}</small></span>
+                </label>
+              )
+            })}
           </div>
         </section>
 
