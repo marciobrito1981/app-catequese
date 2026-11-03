@@ -182,7 +182,7 @@ export function AttendancePanel({ registrations, onFeedback }: {
     const next: Record<string, boolean> = {}
     for (const student of students) {
       const record = allAttendance.find((item) => item.meeting_id === meetingId && item.catequizando_id === student.id)
-      next[student.id] = record ? record.present : true
+      next[student.id] = record ? record.present : false
     }
     setMarks(next)
   }, [meetingId, allAttendance, students])
@@ -198,7 +198,7 @@ export function AttendancePanel({ registrations, onFeedback }: {
       students.map((student) => ({
         meeting_id: meetingId,
         catequizando_id: student.id,
-        present: marks[student.id] ?? true,
+        present: marks[student.id] ?? false,
         recorded_by: userData.user?.id ?? null,
         recorded_at: new Date().toISOString(),
       })),
@@ -217,7 +217,7 @@ export function AttendancePanel({ registrations, onFeedback }: {
   return (
     <section className="schedule-management">
       <div className="dashboard-section-title">
-        <div><h2>Chamada dos encontros</h2><p>Marque a presença dos catequizandos confirmados. Limite de faltas: {maxAbsences}.</p></div>
+        <div><h2>Chamada dos encontros</h2><p>Marque apenas os catequizandos que compareceram; os não marcados serão registrados como falta. Limite de faltas: {maxAbsences}.</p></div>
       </div>
       <div className="management-card">
         <div className="management-fields">
@@ -238,7 +238,7 @@ export function AttendancePanel({ registrations, onFeedback }: {
                 <label>
                   <input
                     type="checkbox"
-                    checked={marks[student.id] ?? true}
+                    checked={marks[student.id] ?? false}
                     onChange={(event) => setMarks((current) => ({ ...current, [student.id]: event.target.checked }))}
                   /> Presente
                 </label>
