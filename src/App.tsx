@@ -469,9 +469,9 @@ function LoginPage({
         <div className="welcome-top">
           <div className="brand-lockup">
             <span className="brand-symbol"><Church size={24} strokeWidth={1.6} /></span>
-            <span>PARÓQUIA SÃO JOSÉ</span>
+            <span>PARÓQUIA SÃO JOSÉ - CAMPINAS/SP</span>
           </div>
-          <span className="version-pill">ESPAÇO DA CATEQUESE</span>
+          <span className="version-pill">ESPAÇO DA CATEQUESE ADULTOS</span>
         </div>
         <div className="welcome-copy">
           <span className="eyebrow"><span /> UM CAMINHO DE FÉ E ENCONTRO</span>
@@ -485,7 +485,6 @@ function LoginPage({
         </div>
         <div className="welcome-footer">
           <span><Heart size={14} /> Fé que acolhe. Comunidade que transforma.</span>
-          <span>DESDE 1958</span>
         </div>
         <div className="decorative-cross" aria-hidden="true">✳</div>
       </section>
