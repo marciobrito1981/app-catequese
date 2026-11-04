@@ -472,3 +472,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, label:focus-wit
 .notifications-list .feedback { align-items: center; margin: 0; }
 .notifications-list .feedback span { flex: 1; }
 .coordinator-catechist { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; font-size: 9px; }
+
+/* Agenda de encontros */
+.agenda-filter { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; color: var(--ink); background: #fff; font-size: 11px; }
+.agenda-calendar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.agenda-calendar-head strong { color: var(--navy); font-family: var(--serif); font-size: 15px; text-transform: capitalize; }
+.agenda-calendar-head button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; color: var(--navy); background: #fff; font-size: 16px; line-height: 1; cursor: pointer; }
+.agenda-calendar-head button:hover { border-color: var(--gold); color: #8b784e; }
+.agenda-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-bottom: 16px; text-align: center; }
+.agenda-weekday { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; padding: 4px 0; }
+.agenda-day { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 42px; border: 1px solid transparent; border-radius: 6px; padding: 4px 2px; color: var(--ink); font-size: 11px; }
+.agenda-day.empty { visibility: hidden; }
+.agenda-day.has-meeting { border-color: var(--gold); color: #fff; background: var(--navy); }
+.agenda-day small { color: var(--gold-light); font-size: 8px; line-height: 1.1; }
+.agenda-list-title { margin: 4px 0 6px; color: var(--navy); font-size: 12px; }
+.agenda-list-row small { display: block; color: var(--muted); }
+.agenda-list-row strong { color: var(--navy); }

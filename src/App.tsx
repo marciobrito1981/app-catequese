@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
-import { AttendancePanel, MeetingsManagement, NotificationsBanner, TransferClassControl } from './MeetingsPanels'
+import { AttendancePanel, MeetingAgenda, MeetingsManagement, NotificationsBanner, TransferClassControl } from './MeetingsPanels'
 import {
   calculateAge,
   digits,
@@ -1650,7 +1650,7 @@ function Dashboard({
   const [catechists, setCatechists] = useState<CatechistRecord[]>([])
   const [adminSchedules, setAdminSchedules] = useState<AdminSchedule[]>([])
   const [classes, setClasses] = useState<{ id: string; name: string; active: boolean }[]>([])
-  const [activeSection, setActiveSection] = useState<'applications' | 'catequizandos' | 'schedules' | 'catechists' | 'profiles' | 'meetings' | 'attendance'>('applications')
+  const [activeSection, setActiveSection] = useState<'applications' | 'catequizandos' | 'schedules' | 'catechists' | 'profiles' | 'meetings' | 'attendance' | 'agenda'>('applications')
   const [viewingRegistration, setViewingRegistration] = useState<RegistrationRow | null>(null)
   const [catechistName, setCatechistName] = useState('')
   const [catechistPhone, setCatechistPhone] = useState('')
@@ -2350,6 +2350,7 @@ function Dashboard({
             <button className={`sidebar-nav-item ${activeSection === 'meetings' ? 'active' : ''}`} onClick={() => { setActiveSection('meetings'); onCloseMenu() }}><CalendarDays size={18} /> Cadastro de encontros</button>
           </>
         )}
+        <button className={`sidebar-nav-item ${activeSection === 'agenda' ? 'active' : ''}`} onClick={() => { setActiveSection('agenda'); onCloseMenu() }}><CalendarDays size={18} /> Agenda de encontros</button>
         {profile.role !== 'catequizando' && (
           <button className={`sidebar-nav-item ${activeSection === 'attendance' ? 'active' : ''}`} onClick={() => { setActiveSection('attendance'); onCloseMenu() }}><FileCheck2 size={18} /> Chamada</button>
         )}
@@ -2376,6 +2377,7 @@ function Dashboard({
           </div>
           <ErrorBanner feedback={feedback} />
           <NotificationsBanner profile={profile} />
+          {activeSection === 'agenda' && <MeetingAgenda profile={profile} onFeedback={setFeedback} />}
           {profile.role === 'coordenador' && activeSection === 'meetings' && <MeetingsManagement onFeedback={setFeedback} />}
           {profile.role !== 'catequizando' && activeSection === 'attendance' && <AttendancePanel registrations={applications} role={profile.role} onFeedback={setFeedback} />}
           {profile.role === 'coordenador' && activeSection === 'schedules' && (

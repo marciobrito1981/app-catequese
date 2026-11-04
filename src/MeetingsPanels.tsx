@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Bell, LoaderCircle, X } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import type { AppNotification, AttendanceRecord, AuthenticatedProfile, Meeting, RegistrationRow } from './lib/types'
+import type { AppNotification, AttendanceRecord, AuthenticatedProfile, ClassMeetingDate, Meeting, RegistrationRow } from './lib/types'
 
 type Notify = (feedback: { kind: 'success' | 'error' | 'info'; text: string }) => void
 
@@ -425,5 +425,181 @@ export function NotificationsBanner({ profile }: { profile: AuthenticatedProfile
         </div>
       ))}
     </div>
+  )
+}
+
+const monthFormat = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
+const parseDate = (value: string) => new Date(`${value}T00:00:00`)
+
+export function MeetingAgenda({ profile, onFeedback }: { profile: AuthenticatedProfile; onFeedback: Notify }) {
+  const canManage = profile.role !== 'catequizando'
+  const isCoordinator = profile.role === 'coordenador'
+  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [classes, setClasses] = useState<{ id: string; name: string }[]>([])
+  const [dates, setDates] = useState<ClassMeetingDate[]>([])
+  const [ownClassId, setOwnClassId] = useState<string | null>(null)
+  const [filterClassId, setFilterClassId] = useState('')
+  const [month, setMonth] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1) })
+  const [formClassId, setFormClassId] = useState('')
+  const [meetingId, setMeetingId] = useState('')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [location, setLocation] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const load = useCallback(async () => {
+    if (!supabase) return
+    const [meetingRes, classRes, dateRes, ownRes] = await Promise.all([
+      supabase.from('meetings').select('*').order('meeting_number'),
+      supabase.from('classes').select('id, name').order('name'),
+      supabase.from('class_meeting_dates').select('*').order('meeting_date'),
+      canManage ? supabase.from('t_catequista').select('class_id').eq('id', profile.id).maybeSingle() : Promise.resolve({ data: null }),
+    ])
+    if (meetingRes.error || dateRes.error) onFeedback({ kind: 'error', text: 'Não foi possível carregar a agenda de encontros.' })
+    setMeetings(meetingRes.data ?? [])
+    setClasses(classRes.data ?? [])
+    setDates(dateRes.data ?? [])
+    const own = (ownRes.data as { class_id: string | null } | null)?.class_id ?? null
+    setOwnClassId(own)
+    setFormClassId((current) => current || own || '')
+  }, [canManage, profile.id, onFeedback])
+
+  useEffect(() => { void load() }, [load])
+
+  const className = (id: string) => classes.find((item) => item.id === id)?.name ?? 'Turma'
+  const meetingLabel = (id: string) => {
+    const meeting = meetings.find((item) => item.id === id)
+    return meeting ? `Encontro ${meeting.meeting_number} – ${meeting.theme}` : 'Encontro'
+  }
+  const manageableClasses = isCoordinator ? classes : classes.filter((item) => item.id === ownClassId)
+  const visibleDates = dates.filter((item) => !filterClassId || item.class_id === filterClassId)
+
+  const reset = () => { setEditingId(null); setMeetingId(''); setDate(''); setTime(''); setLocation('') }
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!supabase || !formClassId || !meetingId || !date) return
+    setSaving(true)
+    const payload = { meeting_date: date, starts_at: time || null, location: location.trim() || null }
+    const { error } = editingId
+      ? await supabase.from('class_meeting_dates').update(payload).eq('id', editingId)
+      : await supabase.from('class_meeting_dates').insert({ class_id: formClassId, meeting_id: meetingId, ...payload })
+    setSaving(false)
+    if (error) {
+      onFeedback({ kind: 'error', text: error.code === '23505' ? 'Esta turma já tem data cadastrada para este encontro. Edite a data existente.' : 'Não foi possível salvar a data do encontro.' })
+      return
+    }
+    onFeedback({ kind: 'success', text: 'Data do encontro salva.' })
+    reset()
+    await load()
+  }
+
+  const remove = async (item: ClassMeetingDate) => {
+    if (!supabase || !window.confirm('Remover esta data da agenda?')) return
+    const { error } = await supabase.from('class_meeting_dates').delete().eq('id', item.id)
+    if (error) onFeedback({ kind: 'error', text: 'Não foi possível remover a data.' })
+    else { onFeedback({ kind: 'success', text: 'Data removida.' }); await load() }
+  }
+
+  const edit = (item: ClassMeetingDate) => {
+    setEditingId(item.id)
+    setFormClassId(item.class_id)
+    setMeetingId(item.meeting_id)
+    setDate(item.meeting_date)
+    setTime(item.starts_at?.slice(0, 5) ?? '')
+    setLocation(item.location ?? '')
+  }
+
+  const grid = useMemo(() => {
+    const first = new Date(month.getFullYear(), month.getMonth(), 1)
+    const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
+    const cells: (number | null)[] = Array(first.getDay()).fill(null)
+    for (let day = 1; day <= daysInMonth; day += 1) cells.push(day)
+    return cells
+  }, [month])
+
+  const isoDay = (day: number) => `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const shiftMonth = (delta: number) => setMonth(new Date(month.getFullYear(), month.getMonth() + delta, 1))
+  const monthDates = visibleDates.filter((item) => item.meeting_date.startsWith(isoDay(1).slice(0, 7)))
+  const formatItem = (item: ClassMeetingDate) =>
+    `${parseDate(item.meeting_date).toLocaleDateString('pt-BR')}${item.starts_at ? ` às ${item.starts_at.slice(0, 5)}` : ''}`
+
+  return (
+    <section className="schedule-management">
+      <div className="dashboard-section-title">
+        <div><h2>Agenda de encontros</h2><p>Datas dos encontros de cada turma, visíveis para todos.</p></div>
+        <select className="agenda-filter" aria-label="Filtrar por turma" value={filterClassId} onChange={(event) => setFilterClassId(event.target.value)}>
+          <option value="">Todas as turmas</option>
+          {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+      </div>
+      <div className="management-grid">
+        {canManage && (
+          <form className="management-card" onSubmit={(event) => void save(event)}>
+            <h3>{editingId ? 'Editar data' : 'Cadastrar data de encontro'}</h3>
+            {manageableClasses.length === 0 ? <p>Você ainda não está vinculado a uma turma.</p> : (
+              <>
+                <div className="management-fields">
+                  <label className="span-all">Turma
+                    <select value={formClassId} onChange={(event) => setFormClassId(event.target.value)} disabled={!!editingId || !isCoordinator} required>
+                      <option value="">Selecione</option>
+                      {manageableClasses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="span-all">Encontro
+                    <select value={meetingId} onChange={(event) => setMeetingId(event.target.value)} disabled={!!editingId} required>
+                      <option value="">Selecione</option>
+                      {meetings.map((item) => <option key={item.id} value={item.id}>{item.meeting_number}. {item.theme}</option>)}
+                    </select>
+                  </label>
+                  <label>Data<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label>
+                  <label>Horário<input type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
+                  <label className="span-all">Local<input value={location} onChange={(event) => setLocation(event.target.value)} maxLength={200} placeholder="Ex.: Salão paroquial" /></label>
+                </div>
+                <button className="button button-primary" type="submit" disabled={saving}>
+                  {saving ? <><LoaderCircle className="spin" size={15} /> Salvando...</> : 'Salvar data'}
+                </button>
+                {editingId && <button className="button button-outline" type="button" onClick={reset}>Cancelar</button>}
+              </>
+            )}
+          </form>
+        )}
+        <div className="management-card">
+          <div className="agenda-calendar-head">
+            <button type="button" onClick={() => shiftMonth(-1)} aria-label="Mês anterior">‹</button>
+            <strong>{monthFormat.format(month)}</strong>
+            <button type="button" onClick={() => shiftMonth(1)} aria-label="Próximo mês">›</button>
+          </div>
+          <div className="agenda-grid">
+            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((label, index) => <span className="agenda-weekday" key={index}>{label}</span>)}
+            {grid.map((day, index) => {
+              const dayItems = day ? visibleDates.filter((item) => item.meeting_date === isoDay(day)) : []
+              return (
+                <div key={index} className={`agenda-day${day ? '' : ' empty'}${dayItems.length ? ' has-meeting' : ''}`} title={dayItems.map((item) => `${className(item.class_id)}: ${meetingLabel(item.meeting_id)}`).join('\n')}>
+                  {day}
+                  {dayItems.length > 0 && <small>{dayItems.length > 1 ? `${dayItems.length} enc.` : `Enc. ${meetings.find((m) => m.id === dayItems[0].meeting_id)?.meeting_number ?? ''}`}</small>}
+                </div>
+              )
+            })}
+          </div>
+          <h3 className="agenda-list-title">Encontros do mês</h3>
+          {monthDates.length === 0 ? <span className="empty-class-list">Nenhum encontro agendado neste mês.</span> : monthDates.map((item) => (
+            <div className="class-list-row agenda-list-row" key={item.id}>
+              <span>
+                <strong>{formatItem(item)}</strong> — {meetingLabel(item.meeting_id)}
+                <small> ({className(item.class_id)}{item.location ? `, ${item.location}` : ''})</small>
+              </span>
+              {canManage && (isCoordinator || item.class_id === ownClassId) && (
+                <span>
+                  <button type="button" onClick={() => edit(item)}>Editar</button>
+                  <button type="button" onClick={() => void remove(item)}>Remover</button>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   )
 }

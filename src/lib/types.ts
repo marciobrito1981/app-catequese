@@ -53,6 +53,15 @@ export type Meeting = {
   created_at: string
 }
 
+export type ClassMeetingDate = {
+  id: string
+  class_id: string
+  meeting_id: string
+  meeting_date: string
+  starts_at: string | null
+  location: string | null
+}
+
 export type AttendanceRecord = {
   meeting_id: string
   catequizando_id: string
@@ -163,6 +172,12 @@ export type Database = {
         Row: Meeting
         Insert: { meeting_number: number; theme: string; mandatory: boolean }
         Update: Partial<{ meeting_number: number; theme: string; mandatory: boolean }>
+        Relationships: []
+      }
+      class_meeting_dates: {
+        Row: ClassMeetingDate
+        Insert: { class_id: string; meeting_id: string; meeting_date: string; starts_at?: string | null; location?: string | null }
+        Update: Partial<{ meeting_date: string; starts_at: string | null; location: string | null }>
         Relationships: []
       }
       absence_settings: {
