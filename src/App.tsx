@@ -2325,11 +2325,6 @@ function Dashboard({
     })
   }
 
-  const roleHeading = profile.role === 'coordenador'    ? 'Visão geral da catequese'
-    : profile.role === 'catequista'
-      ? 'Suas inscrições acompanhadas'
-      : 'Seu caminho na catequese'
-
   return (
     <main className="dashboard-page">
       <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`}>
@@ -2372,8 +2367,6 @@ function Dashboard({
         <div className="dashboard-content">
           <div className="dashboard-greeting">
             <span className="eyebrow">{new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date()).toLocaleUpperCase('pt-BR')}</span>
-            <h1>{roleHeading}</h1>
-            <p>Olá, {profile.full_name.split(' ')[0]}. Que bom ter você por aqui.</p>
           </div>
           <ErrorBanner feedback={feedback} />
           <NotificationsBanner profile={profile} />
