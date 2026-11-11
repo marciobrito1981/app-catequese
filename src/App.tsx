@@ -870,6 +870,7 @@ function RegistrationPage({
                 <option value="solteiro">Solteiro(a)</option>
                 <option value="casado_igreja">Casado(a) na Igreja</option>
                 <option value="casado_civil">Casado(a) no civil</option>
+                <option value="uniao_estavel">União Estável</option>
                 <option value="divorciado">Divorciado(a)</option>
                 <option value="viuvo">Viúvo(a)</option>
                 <option value="outro">Outro</option>
@@ -1463,6 +1464,7 @@ const maritalStatusLabels: Record<string, string> = {
   solteiro: 'Solteiro(a)',
   casado_igreja: 'Casado(a) na Igreja',
   casado_civil: 'Casado(a) no civil',
+  uniao_estavel: 'União Estável',
   divorciado: 'Divorciado(a)',
   viuvo: 'Viúvo(a)',
   outro: 'Outro',
